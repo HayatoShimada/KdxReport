@@ -1,0 +1,23 @@
+@page "/logout"
+@using KdxReport.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>ログアウト - 出張報告書システム</PageTitle>
+
+<div class="container mt-5">
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">ログアウト中...</span>
+        </div>
+        <p class="mt-3">ログアウトしています...</p>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthService.SignOutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

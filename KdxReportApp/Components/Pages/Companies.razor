@@ -1,0 +1,316 @@
+@page "/companies"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject CompanyService CompanyService
+@inject NavigationManager Navigation
+
+<PageTitle>会社管理 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-building me-2"></i>会社管理
+            </h2>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <button class="btn btn-primary" @onclick="ShowCreateDialog">
+                <i class="fas fa-plus me-2"></i>新規会社追加
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>会社名</th>
+                                        <th>担当者数</th>
+                                        <th>登録日</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (companies.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4">
+                                                <i class="fas fa-inbox me-2"></i>会社が登録されていません。
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var company in companies)
+                                        {
+                                            <tr>
+                                                <td>@company.CompanyName</td>
+                                                <td>@company.CompanyContacts.Count 人</td>
+                                                <td>@company.CreatedAt.ToString("yyyy/MM/dd")</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info me-2" @onclick="() => ShowEditDialog(company)">
+                                                        <i class="fas fa-edit"></i> 編集
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(company)">
+                                                        <i class="fas fa-trash"></i> 削除
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (showDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @if (isEditMode)
+                        {
+                            <text><i class="fas fa-edit me-2"></i>会社編集</text>
+                        }
+                        else
+                        {
+                            <text><i class="fas fa-plus me-2"></i>新規会社追加</text>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentCompany" OnValidSubmit="@HandleSubmit" FormName="CompanyEditForm">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="companyName" class="form-label">会社名 <span class="text-danger">*</span></label>
+                            <InputText id="companyName" class="form-control" @bind-Value="currentCompany.CompanyName" />
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseDialog">
+                                <i class="fas fa-times me-2"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-save me-2"></i>保存
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle me-2"></i>削除確認
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <p>以下の会社を削除してもよろしいですか？</p>
+                    <p class="fw-bold">@companyToDelete?.CompanyName</p>
+                    <p class="text-danger small">※ この操作は取り消せません。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteDialog">
+                        <i class="fas fa-times me-2"></i>キャンセル
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-trash me-2"></i>削除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Company> companies = new();
+    private Company currentCompany = new();
+    private Company? companyToDelete;
+
+    private bool isLoading = true;
+    private bool showDialog = false;
+    private bool showDeleteDialog = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+
+    private string? successMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanies();
+    }
+
+    private async Task LoadCompanies()
+    {
+        isLoading = true;
+        try
+        {
+            companies = await CompanyService.GetAllCompaniesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateDialog()
+    {
+        currentCompany = new Company();
+        isEditMode = false;
+        showDialog = true;
+    }
+
+    private void ShowEditDialog(Company company)
+    {
+        currentCompany = new Company
+        {
+            CompanyId = company.CompanyId,
+            CompanyName = company.CompanyName
+        };
+        isEditMode = true;
+        showDialog = true;
+    }
+
+    private void CloseDialog()
+    {
+        showDialog = false;
+        currentCompany = new Company();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            if (isEditMode)
+            {
+                await CompanyService.UpdateCompanyAsync(currentCompany);
+                successMessage = "会社情報を更新しました。";
+            }
+            else
+            {
+                await CompanyService.CreateCompanyAsync(currentCompany);
+                successMessage = "新しい会社を追加しました。";
+            }
+
+            CloseDialog();
+            await LoadCompanies();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowDeleteConfirm(Company company)
+    {
+        companyToDelete = company;
+        showDeleteDialog = true;
+    }
+
+    private void CloseDeleteDialog()
+    {
+        showDeleteDialog = false;
+        companyToDelete = null;
+    }
+
+    private async Task HandleDelete()
+    {
+        if (companyToDelete == null) return;
+
+        isDeleting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await CompanyService.DeleteCompanyAsync(companyToDelete.CompanyId);
+            successMessage = $"「{companyToDelete.CompanyName}」を削除しました。";
+            CloseDeleteDialog();
+            await LoadCompanies();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"削除に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

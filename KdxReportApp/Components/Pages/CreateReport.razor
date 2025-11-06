@@ -1,0 +1,400 @@
+@page "/reports/create"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize]
+@inject TripReportService TripReportService
+@inject CompanyService CompanyService
+@inject EquipmentService EquipmentService
+@inject FileStorageService FileStorageService
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject ILogger<CreateReport> Logger
+
+<PageTitle>新規報告書作成 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-file-alt me-2"></i>新規報告書作成
+            </h2>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-lg-10 col-xl-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <EditForm Model="@reportModel" OnValidSubmit="@HandleSubmit" FormName="CreateReportForm">
+                        <DataAnnotationsValidator />
+
+                        <!-- 会社選択 -->
+                        <div class="mb-3">
+                            <label for="companyId" class="form-label">会社 <span class="text-danger">*</span></label>
+                            <InputSelect id="companyId" class="form-select" @bind-Value="reportModel.CompanyId" @onchange="OnCompanyChanged">
+                                <option value="0">-- 会社を選択してください --</option>
+                                @foreach (var company in companies)
+                                {
+                                    <option value="@company.CompanyId">@company.CompanyName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => reportModel.CompanyId)" />
+                        </div>
+
+                        <!-- 担当者選択 -->
+                        <div class="mb-3">
+                            <label for="contactId" class="form-label">担当者 <span class="text-danger">*</span></label>
+                            <InputSelect id="contactId" class="form-select" @bind-Value="reportModel.ContactId" disabled="@(companyContacts.Count == 0)">
+                                <option value="0">-- 担当者を選択してください --</option>
+                                @foreach (var contact in companyContacts)
+                                {
+                                    <option value="@contact.ContactId">@contact.ContactName</option>
+                                }
+                            </InputSelect>
+                            @if (reportModel.CompanyId > 0 && companyContacts.Count == 0)
+                            {
+                                <div class="form-text text-warning">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    この会社には担当者が登録されていません。先に担当者を登録してください。
+                                </div>
+                            }
+                            <ValidationMessage For="@(() => reportModel.ContactId)" />
+                        </div>
+
+                        <!-- 設備選択 -->
+                        <div class="mb-3">
+                            <label for="equipmentId" class="form-label">設備 <span class="text-danger">*</span></label>
+                            <InputSelect id="equipmentId" class="form-select" @bind-Value="reportModel.EquipmentId">
+                                <option value="0">-- 設備を選択してください --</option>
+                                @foreach (var equipment in equipmentList)
+                                {
+                                    <option value="@equipment.EquipmentId">@equipment.EquipmentName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => reportModel.EquipmentId)" />
+                        </div>
+
+                        <!-- 出張期間 -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="tripStartDate" class="form-label">出張開始日 <span class="text-danger">*</span></label>
+                                <InputDate id="tripStartDate" class="form-control" @bind-Value="reportModel.TripStartDate" />
+                                <ValidationMessage For="@(() => reportModel.TripStartDate)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tripEndDate" class="form-label">出張終了日 <span class="text-danger">*</span></label>
+                                <InputDate id="tripEndDate" class="form-control" @bind-Value="reportModel.TripEndDate" />
+                                <ValidationMessage For="@(() => reportModel.TripEndDate)" />
+                            </div>
+                        </div>
+
+                        <!-- 提出者 -->
+                        <div class="mb-3">
+                            <label for="submitter" class="form-label">提出者 <span class="text-danger">*</span></label>
+                            <InputText id="submitter" class="form-control" @bind-Value="reportModel.Submitter" readonly />
+                            <div class="form-text">現在ログイン中のユーザー名が自動入力されます。</div>
+                        </div>
+
+                        <!-- 同伴者 -->
+                        <div class="mb-3">
+                            <label for="companions" class="form-label">同伴者</label>
+                            <InputText id="companions" class="form-control" @bind-Value="reportModel.Companions" placeholder="例: 山田太郎、佐藤花子" />
+                            <div class="form-text">複数の同伴者がいる場合は、カンマ区切りで入力してください。</div>
+                        </div>
+
+                        <!-- 本文（Markdown） -->
+                        <div class="mb-3">
+                            <label for="content" class="form-label">報告内容（Markdown対応） <span class="text-danger">*</span></label>
+                            <InputTextArea id="content" class="form-control" @bind-Value="reportModel.Content" rows="10" placeholder="# 報告内容&#10;&#10;## 作業概要&#10;- 項目1&#10;- 項目2" />
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Markdown記法が使用できます。（# 見出し、**太字**、- リストなど）
+                            </div>
+                            <ValidationMessage For="@(() => reportModel.Content)" />
+                        </div>
+
+                        <!-- 添付ファイル -->
+                        <div class="mb-4">
+                            <label class="form-label">添付ファイル（画像・PDF）</label>
+                            <div class="border rounded p-3 bg-light">
+                                <InputFile OnChange="@HandleFileSelected" multiple accept="image/*,.pdf" class="form-control mb-2" />
+                                <div class="form-text mb-2">
+                                    <i class="fas fa-paperclip me-1"></i>
+                                    画像ファイル（JPG, PNG等）またはPDFファイルを選択してください。複数ファイル選択可能です。
+                                </div>
+
+                                @if (selectedFiles.Count > 0)
+                                {
+                                    <div class="mt-3">
+                                        <strong>選択されたファイル:</strong>
+                                        <ul class="list-group mt-2">
+                                            @foreach (var file in selectedFiles)
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span>
+                                                        @if (FileStorageService.IsImageFile(file.Name))
+                                                        {
+                                                            <i class="fas fa-image text-primary me-2"></i>
+                                                        }
+                                                        else if (FileStorageService.IsPdfFile(file.Name))
+                                                        {
+                                                            <i class="fas fa-file-pdf text-danger me-2"></i>
+                                                        }
+                                                        @file.Name (@GetFileSizeString(file.Size))
+                                                    </span>
+                                                    <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveFile(file)">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- ボタン -->
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary" @onclick="Cancel" disabled="@isSubmitting">
+                                <i class="fas fa-times me-2"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <span>作成中...</span>
+                                }
+                                else
+                                {
+                                    <span><i class="fas fa-check me-2"></i>報告書を作成</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private ReportFormModel reportModel { get; set; } = new();
+
+    private List<Company> companies = new();
+    private List<CompanyContact> companyContacts = new();
+    private List<Models.Equipment> equipmentList = new();
+    private List<IBrowserFile> selectedFiles = new();
+
+    private bool isSubmitting = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // 現在のユーザー情報を取得
+            var currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                reportModel.Submitter = currentUser.UserName;
+            }
+
+            // マスターデータを読み込み
+            companies = await CompanyService.GetAllCompaniesAsync();
+            equipmentList = await EquipmentService.GetAllEquipmentAsync();
+
+            // デフォルトの日付を設定
+            reportModel.TripStartDate = DateTime.Today;
+            reportModel.TripEndDate = DateTime.Today;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"初期化エラー: {ex.Message}";
+            Logger.LogError(ex, "Error initializing create report page.");
+        }
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int companyId) && companyId > 0)
+        {
+            companyContacts = await CompanyService.GetContactsByCompanyIdAsync(companyId);
+            reportModel.ContactId = 0; // Reset contact selection
+        }
+        else
+        {
+            companyContacts.Clear();
+            reportModel.ContactId = 0;
+        }
+        StateHasChanged();
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        foreach (var file in e.GetMultipleFiles(10)) // 最大10ファイル
+        {
+            if (FileStorageService.IsAllowedFileType(file.Name))
+            {
+                if (file.Size <= 10 * 1024 * 1024) // 10MB制限
+                {
+                    selectedFiles.Add(file);
+                }
+                else
+                {
+                    errorMessage = $"ファイル {file.Name} はサイズが大きすぎます（最大10MB）。";
+                }
+            }
+            else
+            {
+                errorMessage = $"ファイル {file.Name} は対応していない形式です。";
+            }
+        }
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+    }
+
+    private string GetFileSizeString(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            // バリデーション
+            if (reportModel.CompanyId == 0)
+            {
+                errorMessage = "会社を選択してください。";
+                isSubmitting = false;
+                return;
+            }
+
+            if (reportModel.ContactId == 0)
+            {
+                errorMessage = "担当者を選択してください。";
+                isSubmitting = false;
+                return;
+            }
+
+            if (reportModel.EquipmentId == 0)
+            {
+                errorMessage = "設備を選択してください。";
+                isSubmitting = false;
+                return;
+            }
+
+            if (reportModel.TripEndDate < reportModel.TripStartDate)
+            {
+                errorMessage = "出張終了日は開始日以降の日付を設定してください。";
+                isSubmitting = false;
+                return;
+            }
+
+            // 報告書を作成
+            var tripReport = new TripReport
+            {
+                CompanyId = reportModel.CompanyId,
+                ContactId = reportModel.ContactId,
+                EquipmentId = reportModel.EquipmentId,
+                TripStartDate = reportModel.TripStartDate,
+                TripEndDate = reportModel.TripEndDate,
+                Submitter = reportModel.Submitter,
+                Companions = reportModel.Companions,
+                Content = reportModel.Content,
+                ApprovalStatus = "pending"
+            };
+
+            var createdReport = await TripReportService.CreateReportAsync(tripReport);
+
+            // 添付ファイルをアップロード
+            if (selectedFiles.Count > 0)
+            {
+                await UploadAttachmentsAsync(createdReport.TripReportId);
+            }
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"報告書の作成に失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error creating trip report.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task UploadAttachmentsAsync(int tripReportId)
+    {
+        var uploadedFiles = new List<(string objectName, string fileName, string fileType, long fileSize)>();
+
+        // ファイルを MinIO にアップロード
+        foreach (var file in selectedFiles)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+                var objectName = await FileStorageService.UploadFileAsync(stream, file.Name, file.ContentType);
+
+                uploadedFiles.Add((objectName, file.Name, file.ContentType, file.Size));
+                Logger.LogInformation("File {FileName} uploaded successfully for report {ReportId}", file.Name, tripReportId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error uploading file {FileName}", file.Name);
+                // エラーが発生してもアップロードできたファイルは保存する
+            }
+        }
+
+        // アップロードされたファイルの情報をデータベースに保存
+        if (uploadedFiles.Count > 0)
+        {
+            await TripReportService.AddAttachmentsToReportAsync(tripReportId, uploadedFiles);
+            Logger.LogInformation("{Count} attachment(s) saved to database for report {ReportId}", uploadedFiles.Count, tripReportId);
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    public class ReportFormModel
+    {
+        public int CompanyId { get; set; }
+        public int ContactId { get; set; }
+        public int EquipmentId { get; set; }
+        public DateTime TripStartDate { get; set; }
+        public DateTime TripEndDate { get; set; }
+        public string Submitter { get; set; } = string.Empty;
+        public string? Companions { get; set; }
+        public string Content { get; set; } = string.Empty;
+    }
+}

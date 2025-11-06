@@ -1,0 +1,130 @@
+@page "/login"
+@using KdxReport.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>ログイン - 出張報告書システム</PageTitle>
+
+<div class="container">
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">
+                        <i class="fas fa-user-circle"></i> ログイン
+                    </h3>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @errorMessage
+                        </div>
+                    }
+
+                    <EditForm Model="loginModel" OnValidSubmit="HandleLogin" FormName="LoginForm">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">メールアドレス</label>
+                            <InputText id="email"
+                                       class="form-control"
+                                       @bind-Value="loginModel.Email"
+                                       placeholder="email@example.com" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">パスワード</label>
+                            <InputText id="password"
+                                       type="password"
+                                       class="form-control"
+                                       @bind-Value="loginModel.Password"
+                                       placeholder="パスワード" />
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>ログイン中...</span>
+                                }
+                                else
+                                {
+                                    <span><i class="fas fa-sign-in-alt me-2"></i>ログイン</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private LoginModel loginModel { get; set; } = new();
+
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var user = await AuthService.AuthenticateAsync(loginModel.Email, loginModel.Password);
+
+            if (user == null)
+            {
+                errorMessage = "メールアドレスまたはパスワードが正しくありません。";
+                isLoading = false;
+                return;
+            }
+
+            await AuthService.SignInAsync(user);
+
+            // Check if user needs to change default password
+            if (await AuthService.IsDefaultPasswordAsync(user.UserId))
+            {
+                Navigation.NavigateTo("/change-password?firstLogin=true", forceLoad: true);
+            }
+            else
+            {
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Login error: {ex}");
+            errorMessage = "ログイン中にエラーが発生しました。もう一度お試しください。";
+            isLoading = false;
+        }
+    }
+
+    private class LoginModel
+    {
+        [Required(ErrorMessage = "メールアドレスを入力してください。")]
+        [EmailAddress(ErrorMessage = "メールアドレスの形式が正しくありません。")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "パスワードを入力してください。")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

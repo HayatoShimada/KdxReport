@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: kdxreport-postgres
+    environment:
+      POSTGRES_DB: kdxreport
+      POSTGRES_USER: kdxuser
+      POSTGRES_PASSWORD: kdxpassword
+      TZ: Asia/Tokyo
+      PGTZ: Asia/Tokyo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kdxreport-network
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:8.10
+    container_name: kdxreport-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "False"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      TZ: Asia/Tokyo
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - kdxreport-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: kdxreport-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      TZ: Asia/Tokyo
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - kdxreport-network
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./KdxReportApp
+      dockerfile: Dockerfile
+    container_name: kdxreport-app
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=kdxreport;Username=kdxuser;Password=kdxpassword;Timezone=Asia/Tokyo"
+      MinIO__Endpoint: "minio:9000"
+      MinIO__AccessKey: "minioadmin"
+      MinIO__SecretKey: "minioadmin"
+      MinIO__BucketName: "kdxreport"
+      MinIO__UseSSL: "false"
+      TZ: Asia/Tokyo
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - minio
+    networks:
+      - kdxreport-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  kdxreport-network:
+    driver: bridge

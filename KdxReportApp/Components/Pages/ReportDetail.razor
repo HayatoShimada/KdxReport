@@ -1,0 +1,456 @@
+@page "/reports/{ReportId:int}"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@using Markdig
+@attribute [Authorize]
+@inject TripReportService TripReportService
+@inject AuthService AuthService
+@inject FileStorageService FileStorageService
+@inject NavigationManager Navigation
+@inject ILogger<ReportDetail> Logger
+
+<PageTitle>報告書詳細 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else if (report == null)
+    {
+        <div class="alert alert-warning" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            指定された報告書が見つかりませんでした。
+        </div>
+        <button class="btn btn-secondary" @onclick="BackToList">
+            <i class="fas fa-arrow-left me-2"></i>一覧に戻る
+        </button>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @successMessage
+                <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @errorMessage
+                <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+
+        <!-- ヘッダー -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h2>
+                    <i class="fas fa-file-alt me-2"></i>報告書 #@report.TripReportId
+                </h2>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <button class="btn btn-secondary" @onclick="BackToList">
+                    <i class="fas fa-arrow-left me-2"></i>一覧に戻る
+                </button>
+            </div>
+        </div>
+
+        <!-- 承認ステータスと承認ボタン -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0">承認状況</h5>
+                                @if (report.ApprovalStatus == "approved")
+                                {
+                                    <span class="badge bg-success fs-6 mt-2">
+                                        <i class="fas fa-check me-1"></i>承認済み
+                                    </span>
+                                    @if (report.Approver != null && report.ApprovedAt.HasValue)
+                                    {
+                                        <p class="text-muted small mt-2 mb-0">
+                                            承認者: @report.Approver.UserName (@report.ApprovedAt.Value.ToString("yyyy/MM/dd HH:mm"))
+                                        </p>
+                                    }
+                                }
+                                else if (report.ApprovalStatus == "rejected")
+                                {
+                                    <span class="badge bg-danger fs-6 mt-2">
+                                        <i class="fas fa-times me-1"></i>却下
+                                    </span>
+                                    @if (report.Approver != null && report.ApprovedAt.HasValue)
+                                    {
+                                        <p class="text-muted small mt-2 mb-0">
+                                            却下者: @report.Approver.UserName (@report.ApprovedAt.Value.ToString("yyyy/MM/dd HH:mm"))
+                                        </p>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark fs-6 mt-2">
+                                        <i class="fas fa-clock me-1"></i>承認待ち
+                                    </span>
+                                }
+                            </div>
+                            @if (report.ApprovalStatus == "pending" && isAdmin)
+                            {
+                                <div>
+                                    <button class="btn btn-success me-2" @onclick="ApproveReport" disabled="@isProcessing">
+                                        @if (isProcessing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        <i class="fas fa-check me-2"></i>承認
+                                    </button>
+                                    <button class="btn btn-danger" @onclick="RejectReport" disabled="@isProcessing">
+                                        @if (isProcessing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        <i class="fas fa-times me-2"></i>却下
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 報告書基本情報 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>基本情報</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>会社:</strong> @report.Company?.CompanyName
+                            </div>
+                            <div class="col-md-6">
+                                <strong>担当者:</strong> @report.Contact?.ContactName
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>設備:</strong> @report.Equipment?.EquipmentName
+                            </div>
+                            <div class="col-md-6">
+                                <strong>出張期間:</strong> @report.TripStartDate.ToString("yyyy/MM/dd") 〜 @report.TripEndDate.ToString("yyyy/MM/dd")
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>提出者:</strong> @report.Submitter
+                            </div>
+                            <div class="col-md-6">
+                                <strong>同伴者:</strong> @(string.IsNullOrWhiteSpace(report.Companions) ? "なし" : report.Companions)
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <strong>作成日:</strong> @report.CreatedAt.ToString("yyyy/MM/dd HH:mm")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 報告内容 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>報告内容</h5>
+                    </div>
+                    <div class="card-body markdown-content">
+                        @((MarkupString)renderedContent)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 添付ファイル -->
+        @if (attachments.Count > 0)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card shadow">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="fas fa-paperclip me-2"></i>添付ファイル (@attachments.Count)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                @foreach (var attachment in attachments)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                @if (FileStorageService.IsImageFile(attachment.FileName))
+                                                {
+                                                    <i class="fas fa-image text-primary me-2"></i>
+                                                }
+                                                else if (FileStorageService.IsPdfFile(attachment.FileName))
+                                                {
+                                                    <i class="fas fa-file-pdf text-danger me-2"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="fas fa-file me-2"></i>
+                                                }
+                                                <strong>@attachment.FileName</strong>
+                                                <span class="text-muted ms-2">(@GetFileSizeString(attachment.FileSize))</span>
+                                            </div>
+                                            <button class="btn btn-sm btn-primary" @onclick="() => DownloadFile(attachment)">
+                                                <i class="fas fa-download me-1"></i>ダウンロード
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .markdown-content {
+        line-height: 1.6;
+    }
+
+    .markdown-content h1 {
+        font-size: 2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 0.5rem;
+    }
+
+    .markdown-content h2 {
+        font-size: 1.5rem;
+        margin-top: 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .markdown-content h3 {
+        font-size: 1.25rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .markdown-content ul, .markdown-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .markdown-content p {
+        margin-bottom: 1rem;
+    }
+
+    .markdown-content code {
+        background-color: #f8f9fa;
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.25rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .markdown-content pre {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+    }
+
+    .markdown-content blockquote {
+        border-left: 4px solid #dee2e6;
+        padding-left: 1rem;
+        margin-left: 0;
+        color: #6c757d;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int ReportId { get; set; }
+
+    private TripReport? report;
+    private List<Attachment> attachments = new();
+    private string renderedContent = string.Empty;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private bool isAdmin = false;
+    private string? successMessage;
+    private string? errorMessage;
+    private int currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+        await CheckUserRole();
+    }
+
+    private async Task CheckUserRole()
+    {
+        try
+        {
+            var currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                currentUserId = currentUser.UserId;
+                isAdmin = currentUser.RoleUsers.Any(ru => ru.Role.RoleName == "Admin");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error checking user role");
+        }
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        try
+        {
+            report = await TripReportService.GetReportByIdAsync(ReportId);
+
+            if (report != null)
+            {
+                // Markdown コンテンツをレンダリング
+                var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+                renderedContent = Markdown.ToHtml(report.Content ?? string.Empty, pipeline);
+
+                // 添付ファイルを取得
+                attachments = report.Threads
+                    .SelectMany(t => t.Attachments)
+                    .ToList();
+
+                // 既読マークを付ける
+                if (currentUserId > 0)
+                {
+                    await TripReportService.MarkAsReadAsync(currentUserId, ReportId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"報告書の読み込みに失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error loading report {ReportId}", ReportId);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApproveReport()
+    {
+        if (report == null || currentUserId == 0) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await TripReportService.ApproveReportAsync(ReportId, currentUserId);
+            if (result)
+            {
+                successMessage = "報告書を承認しました。";
+                await LoadReportAsync();
+            }
+            else
+            {
+                errorMessage = "承認処理に失敗しました。";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"承認処理中にエラーが発生しました: {ex.Message}";
+            Logger.LogError(ex, "Error approving report {ReportId}", ReportId);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task RejectReport()
+    {
+        if (report == null || currentUserId == 0) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await TripReportService.RejectReportAsync(ReportId, currentUserId);
+            if (result)
+            {
+                successMessage = "報告書を却下しました。";
+                await LoadReportAsync();
+            }
+            else
+            {
+                errorMessage = "却下処理に失敗しました。";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"却下処理中にエラーが発生しました: {ex.Message}";
+            Logger.LogError(ex, "Error rejecting report {ReportId}", ReportId);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task DownloadFile(Attachment attachment)
+    {
+        try
+        {
+            var presignedUrl = await FileStorageService.GetPresignedUrlAsync(attachment.FilePath, 3600);
+            Navigation.NavigateTo(presignedUrl, true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"ファイルのダウンロードに失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error downloading file {FileName}", attachment.FileName);
+        }
+    }
+
+    private string GetFileSizeString(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private void BackToList()
+    {
+        Navigation.NavigateTo("/reports");
+    }
+}

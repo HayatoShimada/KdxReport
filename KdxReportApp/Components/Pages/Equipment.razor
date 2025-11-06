@@ -1,0 +1,332 @@
+@page "/equipment"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject EquipmentService EquipmentService
+@inject NavigationManager Navigation
+
+<PageTitle>設備管理 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-cogs me-2"></i>設備管理
+            </h2>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <button class="btn btn-primary" @onclick="ShowCreateDialog">
+                <i class="fas fa-plus me-2"></i>新規設備追加
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>設備名</th>
+                                        <th>トータルカウンタ数</th>
+                                        <th>登録日</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (equipmentList.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4">
+                                                <i class="fas fa-inbox me-2"></i>設備が登録されていません。
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var equipment in equipmentList)
+                                        {
+                                            <tr>
+                                                <td>@equipment.EquipmentName</td>
+                                                <td>
+                                                    @if (equipment.TotalCounter.HasValue)
+                                                    {
+                                                        @equipment.TotalCounter.Value.ToString("N0")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@equipment.CreatedAt.ToString("yyyy/MM/dd")</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info me-2" @onclick="() => ShowEditDialog(equipment)">
+                                                        <i class="fas fa-edit"></i> 編集
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(equipment)">
+                                                        <i class="fas fa-trash"></i> 削除
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (showDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @if (isEditMode)
+                        {
+                            <text><i class="fas fa-edit me-2"></i>設備編集</text>
+                        }
+                        else
+                        {
+                            <text><i class="fas fa-plus me-2"></i>新規設備追加</text>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentEquipment" OnValidSubmit="@HandleSubmit" FormName="EquipmentEditForm">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="equipmentName" class="form-label">設備名 <span class="text-danger">*</span></label>
+                            <InputText id="equipmentName" class="form-control" @bind-Value="currentEquipment.EquipmentName" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="totalCounter" class="form-label">トータルカウンタ数</label>
+                            <InputNumber id="totalCounter" class="form-control" @bind-Value="currentEquipment.TotalCounter" />
+                            <div class="form-text">任意項目です。設定しない場合は空欄のままにしてください。</div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseDialog">
+                                <i class="fas fa-times me-2"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-save me-2"></i>保存
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle me-2"></i>削除確認
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <p>以下の設備を削除してもよろしいですか？</p>
+                    <p class="fw-bold">@equipmentToDelete?.EquipmentName</p>
+                    <p class="text-danger small">※ この操作は取り消せません。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteDialog">
+                        <i class="fas fa-times me-2"></i>キャンセル
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-trash me-2"></i>削除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Models.Equipment> equipmentList = new();
+    private Models.Equipment currentEquipment = new();
+    private Models.Equipment? equipmentToDelete;
+
+    private bool isLoading = true;
+    private bool showDialog = false;
+    private bool showDeleteDialog = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+
+    private string? successMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEquipment();
+    }
+
+    private async Task LoadEquipment()
+    {
+        isLoading = true;
+        try
+        {
+            equipmentList = await EquipmentService.GetAllEquipmentAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateDialog()
+    {
+        currentEquipment = new Models.Equipment();
+        isEditMode = false;
+        showDialog = true;
+    }
+
+    private void ShowEditDialog(Models.Equipment equipment)
+    {
+        currentEquipment = new Models.Equipment
+        {
+            EquipmentId = equipment.EquipmentId,
+            EquipmentName = equipment.EquipmentName,
+            TotalCounter = equipment.TotalCounter
+        };
+        isEditMode = true;
+        showDialog = true;
+    }
+
+    private void CloseDialog()
+    {
+        showDialog = false;
+        currentEquipment = new Models.Equipment();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            if (isEditMode)
+            {
+                await EquipmentService.UpdateEquipmentAsync(currentEquipment);
+                successMessage = "設備情報を更新しました。";
+            }
+            else
+            {
+                await EquipmentService.CreateEquipmentAsync(currentEquipment);
+                successMessage = "新しい設備を追加しました。";
+            }
+
+            CloseDialog();
+            await LoadEquipment();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowDeleteConfirm(Models.Equipment equipment)
+    {
+        equipmentToDelete = equipment;
+        showDeleteDialog = true;
+    }
+
+    private void CloseDeleteDialog()
+    {
+        showDeleteDialog = false;
+        equipmentToDelete = null;
+    }
+
+    private async Task HandleDelete()
+    {
+        if (equipmentToDelete == null) return;
+
+        isDeleting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await EquipmentService.DeleteEquipmentAsync(equipmentToDelete.EquipmentId);
+            successMessage = $"「{equipmentToDelete.EquipmentName}」を削除しました。";
+            CloseDeleteDialog();
+            await LoadEquipment();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"削除に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

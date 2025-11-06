@@ -1,0 +1,280 @@
+﻿@page "/"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@inject TripReportService TripReportService
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>ダッシュボード - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-home me-2"></i>ダッシュボード
+            </h2>
+        </div>
+    </div>
+
+    @if (currentUser != null)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-user-circle me-2"></i>
+                    <strong>@currentUser.UserName</strong> さん、ようこそ！
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-primary mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-envelope me-2"></i>未読報告書
+                    </h5>
+                    <h2 class="card-text">@unreadReports.Count 件</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-warning mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-clock me-2"></i>承認待ち
+                    </h5>
+                    <h2 class="card-text">@pendingApprovalReports.Count 件</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-file-alt me-2"></i>全報告書
+                    </h5>
+                    <h2 class="card-text">@allReports.Count 件</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unread Reports Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-envelope-open-text me-2"></i>未読の出張報告書
+                    </h5>
+                    <button class="btn btn-sm btn-primary" @onclick="RefreshData">
+                        <i class="fas fa-sync-alt me-2"></i>更新
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">読み込み中...</span>
+                            </div>
+                            <p class="mt-3">データを読み込んでいます...</p>
+                        </div>
+                    }
+                    else if (unreadReports.Count == 0)
+                    {
+                        <div class="alert alert-success text-center" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            未読の報告書はありません。
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>提出日</th>
+                                        <th>会社名</th>
+                                        <th>設備名</th>
+                                        <th>出張期間</th>
+                                        <th>提出者</th>
+                                        <th>承認状況</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var report in unreadReports)
+                                    {
+                                        <tr>
+                                            <td>@report.CreatedAt.ToString("yyyy/MM/dd")</td>
+                                            <td>@report.Company.CompanyName</td>
+                                            <td>@report.Equipment.EquipmentName</td>
+                                            <td>@report.TripStartDate.ToString("yyyy/MM/dd") ～ @report.TripEndDate.ToString("yyyy/MM/dd")</td>
+                                            <td>@report.Submitter</td>
+                                            <td>
+                                                @if (report.ApprovalStatus == "pending")
+                                                {
+                                                    <span class="badge bg-warning">承認待ち</span>
+                                                }
+                                                else if (report.ApprovalStatus == "approved")
+                                                {
+                                                    <span class="badge bg-success">承認済み</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">却下</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-primary" @onclick="() => ViewReport(report.TripReportId)">
+                                                    <i class="fas fa-eye me-1"></i>詳細
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Approval Section (for Admin/Manager) -->
+    @if (isAdmin && pendingApprovalReports.Count > 0)
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h5 class="m-0 font-weight-bold text-warning">
+                            <i class="fas fa-clipboard-check me-2"></i>承認待ちの報告書
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>提出日</th>
+                                        <th>会社名</th>
+                                        <th>設備名</th>
+                                        <th>出張期間</th>
+                                        <th>提出者</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var report in pendingApprovalReports)
+                                    {
+                                        <tr>
+                                            <td>@report.CreatedAt.ToString("yyyy/MM/dd")</td>
+                                            <td>@report.Company.CompanyName</td>
+                                            <td>@report.Equipment.EquipmentName</td>
+                                            <td>@report.TripStartDate.ToString("yyyy/MM/dd") ～ @report.TripEndDate.ToString("yyyy/MM/dd")</td>
+                                            <td>@report.Submitter</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-success me-2" @onclick="() => ApproveReport(report.TripReportId)">
+                                                    <i class="fas fa-check me-1"></i>承認
+                                                </button>
+                                                <button class="btn btn-sm btn-danger" @onclick="() => RejectReport(report.TripReportId)">
+                                                    <i class="fas fa-times me-1"></i>却下
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private User? currentUser;
+    private List<TripReport> unreadReports = new();
+    private List<TripReport> pendingApprovalReports = new();
+    private List<TripReport> allReports = new();
+    private bool isLoading = true;
+    private bool isAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        try
+        {
+            currentUser = await AuthService.GetCurrentUserAsync();
+
+            if (currentUser != null)
+            {
+                // Check if user is admin
+                isAdmin = currentUser.RoleUsers.Any(ru => ru.Role.RoleName == "Admin");
+
+                // Load unread reports
+                unreadReports = await TripReportService.GetUnreadReportsForUserAsync(currentUser.UserId);
+
+                // Load pending approval reports (for admins)
+                if (isAdmin)
+                {
+                    pendingApprovalReports = await TripReportService.GetPendingApprovalReportsAsync();
+                }
+
+                // Load all reports count
+                allReports = await TripReportService.GetAllReportsAsync();
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+    }
+
+    private async Task ViewReport(int tripReportId)
+    {
+        if (currentUser != null)
+        {
+            await TripReportService.MarkAsReadAsync(currentUser.UserId, tripReportId);
+        }
+        Navigation.NavigateTo($"/reports/{tripReportId}");
+    }
+
+    private async Task ApproveReport(int tripReportId)
+    {
+        if (currentUser != null)
+        {
+            await TripReportService.ApproveReportAsync(tripReportId, currentUser.UserId);
+            await RefreshData();
+        }
+    }
+
+    private async Task RejectReport(int tripReportId)
+    {
+        if (currentUser != null)
+        {
+            await TripReportService.RejectReportAsync(tripReportId, currentUser.UserId);
+            await RefreshData();
+        }
+    }
+}
