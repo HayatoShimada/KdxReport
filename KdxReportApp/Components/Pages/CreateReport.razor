@@ -4,6 +4,7 @@
 @using KPRO_Library.Models.Generated
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
+@using Markdig
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject TripReportService TripReportService
@@ -40,10 +41,10 @@
                     <EditForm Model="@reportModel" OnValidSubmit="@HandleSubmit" FormName="CreateReportForm">
                         <DataAnnotationsValidator />
 
-                        <!-- 会社選択 -->
+                        <!-- 会社選択（MstCompany） -->
                         <div class="mb-3">
                             <label for="companyCd" class="form-label">会社 <span class="text-danger">*</span></label>
-                            <InputSelect id="companyCd" class="form-select" @bind-Value="reportModel.CompanyCd" @bind-Value:event="onchange">
+                            <InputSelect id="companyCd" class="form-select" TValue="string" @bind-Value="reportModel.CompanyCd" @bind-Value:event="onchange">
                                 <option value="">-- 会社を選択してください --</option>
                                 @foreach (var company in companies)
                                 {
@@ -53,10 +54,10 @@
                             <ValidationMessage For="@(() => reportModel.CompanyCd)" />
                         </div>
 
-                        <!-- 取引先選択 -->
+                        <!-- 取引先選択（MstCustomer） -->
                         <div class="mb-3">
                             <label for="customerCd" class="form-label">取引先 <span class="text-danger">*</span></label>
-                            <InputSelect id="customerCd" class="form-select" TValue="string" value="@reportModel.CustomerCd" @onchange="OnCustomerChanged" disabled="@(customers.Count == 0)">
+                            <InputSelect id="customerCd" class="form-select" TValue="string" @bind-Value="reportModel.CustomerCd" @bind-Value:after="OnCustomerChanged" disabled="@(customers.Count == 0)">
                                 <option value="">-- 取引先を選択してください --</option>
                                 @foreach (var customer in customers)
                                 {
@@ -69,7 +70,7 @@
                         <!-- 担当者選択 -->
                         <div class="mb-3">
                             <label for="staffCd" class="form-label">担当者 <span class="text-danger">*</span></label>
-                            <InputSelect id="staffCd" class="form-select" @bind-Value="reportModel.StaffCd" disabled="@(companyContacts.Count == 0)">
+                            <InputSelect id="staffCd" class="form-select" TValue="string" @bind-Value="reportModel.StaffCd" disabled="@(companyContacts.Count == 0)">
                                 <option value="">-- 担当者を選択してください --</option>
                                 @foreach (var contact in companyContacts)
                                 {
@@ -129,8 +130,13 @@
 
                         <!-- 本文（Markdown） -->
                         <div class="mb-3">
-                            <label for="content" class="form-label">報告内容（Markdown対応） <span class="text-danger">*</span></label>
-                            <InputTextArea id="content" class="form-control" @bind-Value="reportModel.Content" rows="10" placeholder="# 報告内容&#10;&#10;## 作業概要&#10;- 項目1&#10;- 項目2" />
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label for="content" class="form-label mb-0">報告内容（Markdown対応） <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowPreviewModal">
+                                    <i class="fas fa-eye me-1"></i>プレビューを表示
+                                </button>
+                            </div>
+                            <InputTextArea id="content" class="form-control" @bind-Value="reportModel.Content" rows="15" placeholder="# 報告内容&#10;&#10;## 作業概要&#10;- 項目1&#10;- 項目2" style="font-family: monospace; font-size: 0.9em;" />
                             <div class="form-text">
                                 <i class="fas fa-info-circle me-1"></i>
                                 Markdown記法が使用できます。（# 見出し、**太字**、- リストなど）
@@ -202,6 +208,38 @@
     </div>
 </div>
 
+<!-- プレビューモーダル -->
+@if (showPreviewModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="ClosePreviewModal">
+        <div class="modal-dialog modal-lg modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-eye me-2"></i>Markdownプレビュー
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ClosePreviewModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    @if (string.IsNullOrWhiteSpace(previewHtml))
+                    {
+                        <p class="text-muted mb-0"><em>プレビューを生成中...</em></p>
+                    }
+                    else
+                    {
+                        @((MarkupString)previewHtml)
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ClosePreviewModal">
+                        <i class="fas fa-times me-2"></i>閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [SupplyParameterFromForm]
     private ReportFormModel reportModel { get; set; } = new();
@@ -214,6 +252,9 @@
 
     private bool isSubmitting = false;
     private string? errorMessage;
+    private string previewHtml = string.Empty;
+    private bool showPreviewModal = false;
+    private static readonly MarkdownPipeline markdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
     protected override async Task OnInitializedAsync()
     {
@@ -226,14 +267,58 @@
                 reportModel.Submitter = currentUser.UserName;
             }
 
-            // マスターデータを読み込み
-            companies = await CompanyService.GetAllCompaniesAsync();
-            customers = await CompanyService.GetAllCustomersAsync();
-            equipmentList = await EquipmentService.GetAllEquipmentAsync();
-
             // デフォルトの日付を設定
             reportModel.TripStartDate = DateTime.Today;
             reportModel.TripEndDate = DateTime.Today;
+
+            // マスターデータを読み込み（KPRO接続は別途処理）
+            try
+            {
+                equipmentList = await EquipmentService.GetAllEquipmentAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load equipment list.");
+                errorMessage = $"設備データの読み込みに失敗しました: {ex.Message}";
+            }
+
+            // KPROから会社データを読み込み（MstCompanyから）
+            try
+            {
+                companies = await CompanyService.GetAllCompaniesAsync();
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+                Logger.LogError("Connection timeout when loading companies from external database.");
+                errorMessage = "外部データベースへの接続がタイムアウトしました。ネットワーク接続を確認してください。";
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load companies from external database.");
+                errorMessage = $"会社データの読み込みに失敗しました: {ex.Message}";
+            }
+
+            // KPROから取引先データを読み込み（MstCustomerから）
+            try
+            {
+                customers = await CompanyService.GetAllCustomersAsync();
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+                Logger.LogError("Connection timeout when loading customers from external database.");
+                if (string.IsNullOrEmpty(errorMessage))
+                {
+                    errorMessage = "外部データベースへの接続がタイムアウトしました。ネットワーク接続を確認してください。";
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load customers from external database.");
+                if (string.IsNullOrEmpty(errorMessage))
+                {
+                    errorMessage = $"取引先データの読み込みに失敗しました: {ex.Message}";
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -242,10 +327,9 @@
         }
     }
 
-    private async Task OnCustomerChanged(ChangeEventArgs e)
+    private async Task OnCustomerChanged()
     {
-        var customerCd = e.Value?.ToString() ?? string.Empty;
-        reportModel.CustomerCd = customerCd;
+        var customerCd = reportModel.CustomerCd;
         
         if (!string.IsNullOrEmpty(customerCd))
         {
@@ -257,8 +341,34 @@
             companyContacts.Clear();
             reportModel.StaffCd = string.Empty;
         }
-        await Task.CompletedTask;
         StateHasChanged();
+    }
+
+    private void ShowPreviewModal()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(reportModel.Content))
+            {
+                previewHtml = "<p class='text-muted'><em>内容が入力されていません。</em></p>";
+            }
+            else
+            {
+                previewHtml = Markdown.ToHtml(reportModel.Content, markdownPipeline);
+            }
+            showPreviewModal = true;
+        }
+        catch
+        {
+            // エラー時は無視（ユーザー要求）
+            previewHtml = "<p class='text-danger'><em>プレビューの生成中にエラーが発生しました。</em></p>";
+            showPreviewModal = true;
+        }
+    }
+
+    private void ClosePreviewModal()
+    {
+        showPreviewModal = false;
     }
 
     private void HandleFileSelected(InputFileChangeEventArgs e)
@@ -316,11 +426,10 @@
                 return;
             }
 
+            // 会社コードを取引先コードとしても使用
             if (string.IsNullOrEmpty(reportModel.CustomerCd))
             {
-                errorMessage = "取引先を選択してください。";
-                isSubmitting = false;
-                return;
+                reportModel.CustomerCd = reportModel.CompanyCd;
             }
 
             if (string.IsNullOrEmpty(reportModel.StaffCd))

@@ -214,6 +214,24 @@ public class ReadOnlyDataService
             .FirstOrDefaultAsync(s => s.StaffCd == staffCd);
     }
 
+    /// <summary>
+    /// 担当者名（氏名）で担当者マスタを検索（部分一致）
+    /// </summary>
+    public async Task<List<MstStaff>> SearchStaffsByNameAsync(string staffName)
+    {
+        if (string.IsNullOrWhiteSpace(staffName))
+        {
+            return new List<MstStaff>();
+        }
+
+        return await _context.MstStaffs
+            .AsNoTracking()
+            .Where(s => s.StaffNm != null && s.StaffNm.Contains(staffName))
+            .OrderBy(s => s.StaffNm)
+            .Take(50) // 最大50件まで
+            .ToListAsync();
+    }
+
     #endregion
 }
 

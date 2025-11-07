@@ -10,6 +10,13 @@ public class Equipment
     [Column("equipment_id")]
     public int EquipmentId { get; set; }
 
+    /// <summary>
+    /// KPRO（MstCustomer）の取引先コード（会社コードとして使用）
+    /// </summary>
+    [MaxLength(50)]
+    [Column("company_cd")]
+    public string? CompanyCd { get; set; }
+
     [Required]
     [MaxLength(200)]
     [Column("equipment_name")]

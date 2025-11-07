@@ -4,7 +4,7 @@
 
 > **重要**:
 > - このライブラリは**本番環境の既存データベースへの接続**を想定しています
-> - **読み取り専用**です。外部DBへの書き込み、更新、削除は一切行いません
+> - **読み取り専用**です。KPROへの書き込み、更新、削除は一切行いません
 > - データベース側のデータは一切変更しません
 
 ## 機能
@@ -129,7 +129,7 @@ public class YourService
         var isConnected = await _externalCompanyService.TestConnectionAsync();
         if (!isConnected)
         {
-            throw new Exception("外部DBに接続できません");
+            throw new Exception("KPROに接続できません");
         }
 
         // すべての会社情報を取得
@@ -162,7 +162,7 @@ public class CompanyMigrationService
 
     public async Task MigrateCompaniesAsync()
     {
-        // 外部DBから会社情報を取得
+        // KPROから会社情報を取得
         var externalCompanies = await _externalService.GetAllCompaniesAsync();
 
         foreach (var externalCompany in externalCompanies)

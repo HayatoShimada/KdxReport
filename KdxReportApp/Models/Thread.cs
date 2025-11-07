@@ -11,7 +11,7 @@ public class Thread
     public int ThreadId { get; set; }
 
     /// <summary>
-    /// 外部DB（MstCompany）の会社コード
+    /// KPRO（MstCompany）の会社コード
     /// </summary>
     [MaxLength(50)]
     [Column("company_cd")]

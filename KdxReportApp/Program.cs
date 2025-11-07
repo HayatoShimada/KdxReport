@@ -30,10 +30,19 @@ builder.Services.AddDbContext<KdxReportDbContext>(options =>
 
 // Add External Database Context (SQL Server - Read Only)
 builder.Services.AddDbContext<CompanyDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetSection("ExternalDatabase")["ConnectionString"] ??
-        throw new InvalidOperationException("ExternalDatabase:ConnectionString is not configured")
-    ));
+{
+    var connectionString = builder.Configuration.GetSection("ExternalDatabase")["ConnectionString"] ??
+        throw new InvalidOperationException("ExternalDatabase:ConnectionString is not configured");
+    
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.CommandTimeout(60); // 60秒のタイムアウト
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null);
+    });
+});
 
 // Add MinIO client
 builder.Services.AddMinio(configureClient => configureClient

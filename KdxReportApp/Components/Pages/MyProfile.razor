@@ -82,7 +82,7 @@
                 <div class="card shadow mb-4">
                     <div class="card-header bg-info text-white">
                         <h5 class="mb-0">
-                            <i class="fas fa-link me-2"></i>外部DB連携（MstStaff）
+                            <i class="fas fa-link me-2"></i>KPRO連携（MstStaff）
                         </h5>
                     </div>
                     <div class="card-body">
@@ -112,12 +112,19 @@
                         {
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
-                                外部DB（MstStaff）と連携されていません。
+                                KPRO（MstStaff）と連携されていません。
                             </div>
                             <div class="mb-3">
-                                <label for="staffSearch" class="form-label">担当者コードで検索</label>
+                                <label class="form-label">検索方法</label>
+                                <div class="btn-group w-100 mb-2" role="group">
+                                    <input type="radio" class="btn-check" id="searchByCode" name="searchType" checked="@(searchType == "code")" @onchange="@(() => { searchType = "code"; searchedStaffs.Clear(); searchedStaff = null; })" />
+                                    <label class="btn btn-outline-primary" for="searchByCode">担当者コード</label>
+                                    
+                                    <input type="radio" class="btn-check" id="searchByName" name="searchType" checked="@(searchType == "name")" @onchange="@(() => { searchType = "name"; searchedStaffs.Clear(); searchedStaff = null; })" />
+                                    <label class="btn btn-outline-primary" for="searchByName">氏名</label>
+                                </div>
                                 <div class="input-group">
-                                    <InputText id="staffSearch" class="form-control" @bind-Value="staffSearchCode" placeholder="担当者コード" />
+                                    <InputText id="staffSearch" class="form-control" @bind-Value="staffSearchCode" placeholder="@(searchType == "code" ? "担当者コード" : "氏名（部分一致可）")" />
                                     <button class="btn btn-primary" @onclick="SearchStaff" disabled="@isSearchingStaff">
                                         @if (isSearchingStaff)
                                         {
@@ -138,6 +145,31 @@
                                         <button class="btn btn-success btn-sm mt-2" @onclick="LinkStaff">
                                             <i class="fas fa-link me-2"></i>この担当者と連携
                                         </button>
+                                    </div>
+                                </div>
+                            }
+                            @if (searchedStaffs != null && searchedStaffs.Count > 0)
+                            {
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h6 class="card-title">検索結果（@searchedStaffs.Count 件）</h6>
+                                        <div class="list-group">
+                                            @foreach (var staff in searchedStaffs)
+                                            {
+                                                <div class="list-group-item">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>@staff.StaffNm</strong>
+                                                            <br />
+                                                            <small class="text-muted">担当者コード: @staff.StaffCd | 登録番号: @staff.SerialNo</small>
+                                                        </div>
+                                                        <button class="btn btn-success btn-sm" @onclick="() => SelectStaff(staff)">
+                                                            <i class="fas fa-link me-1"></i>選択
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
                                 </div>
                             }
@@ -250,7 +282,7 @@
                     <button type="button" class="btn-close" @onclick="CloseUnlinkDialog"></button>
                 </div>
                 <div class="modal-body">
-                    <p>外部DB（MstStaff）との連携を解除しますか？</p>
+                    <p>KPRO（MstStaff）との連携を解除しますか？</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseUnlinkDialog">キャンセル</button>
@@ -275,7 +307,9 @@
     private bool isSearchingStaff = false;
     private bool isUnlinking = false;
     private string staffSearchCode = string.Empty;
+    private string searchType = "code"; // "code" or "name"
     private MstStaff? searchedStaff;
+    private List<MstStaff> searchedStaffs = new();
     private string? staffSearchError;
     private bool showUnlinkDialog = false;
 
@@ -311,20 +345,34 @@
     {
         if (string.IsNullOrWhiteSpace(staffSearchCode))
         {
-            staffSearchError = "担当者コードを入力してください。";
+            staffSearchError = searchType == "code" ? "担当者コードを入力してください。" : "氏名を入力してください。";
             return;
         }
 
         isSearchingStaff = true;
         staffSearchError = null;
         searchedStaff = null;
+        searchedStaffs.Clear();
 
         try
         {
-            searchedStaff = await ReadOnlyDataService.GetStaffByStaffCdAsync(staffSearchCode.Trim());
-            if (searchedStaff == null)
+            if (searchType == "code")
             {
-                staffSearchError = "該当する担当者が見つかりませんでした。";
+                // 担当者コードで検索
+                searchedStaff = await ReadOnlyDataService.GetStaffByStaffCdAsync(staffSearchCode.Trim());
+                if (searchedStaff == null)
+                {
+                    staffSearchError = "該当する担当者が見つかりませんでした。";
+                }
+            }
+            else
+            {
+                // 氏名で検索
+                searchedStaffs = await ReadOnlyDataService.SearchStaffsByNameAsync(staffSearchCode.Trim());
+                if (searchedStaffs.Count == 0)
+                {
+                    staffSearchError = "該当する担当者が見つかりませんでした。";
+                }
             }
         }
         catch (Exception ex)
@@ -336,6 +384,13 @@
         {
             isSearchingStaff = false;
         }
+    }
+
+    private void SelectStaff(MstStaff staff)
+    {
+        searchedStaff = staff;
+        searchedStaffs.Clear();
+        StateHasChanged();
     }
 
     private async Task LinkStaff()

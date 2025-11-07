@@ -62,7 +62,7 @@
                                         @foreach (var company in companies)
                                         {
                                             <tr>
-                                                <td>@company.CompanyCd</td>
+                                                <td>@company.CustomerCd</td>
                                                 <td>@company.CompanyNm</td>
                                             </tr>
                                         }
@@ -78,7 +78,7 @@
 </div>
 
 @code {
-    private List<MstCompany> companies = new();
+    private List<MstCustomer> companies = new();
 
     private bool isLoading = true;
     private string? errorMessage;
@@ -93,7 +93,7 @@
         isLoading = true;
         try
         {
-            companies = await CompanyService.GetAllCompaniesAsync();
+            companies = await CompanyService.GetAllCustomersAsync();
         }
         catch (Exception ex)
         {

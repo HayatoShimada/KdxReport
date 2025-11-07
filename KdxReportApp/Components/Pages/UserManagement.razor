@@ -1,0 +1,712 @@
+@page "/users"
+@using KdxReport.Services
+@using KdxReport.Models
+@using KPRO_Library.Models.Generated
+@using KPRO_Library.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject AuthService AuthService
+@inject UserService UserService
+@inject ReadOnlyDataService ReadOnlyDataService
+@inject NavigationManager Navigation
+@inject ILogger<UserManagement> Logger
+
+<PageTitle>ユーザー管理 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-users me-2"></i>ユーザー管理
+            </h2>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <button class="btn btn-primary" @onclick="ShowCreateDialog">
+                <i class="fas fa-plus me-2"></i>新規ユーザー追加
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>ユーザー名</th>
+                                        <th>メールアドレス</th>
+                                        <th>ロール</th>
+                                        <th>KPRO連携</th>
+                                        <th>登録日</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (users.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center py-4">
+                                                <i class="fas fa-inbox me-2"></i>ユーザーが登録されていません。
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var (user, staff) in users)
+                                        {
+                                            <tr>
+                                                <td>@user.UserId</td>
+                                                <td>@user.UserName</td>
+                                                <td>@user.Email</td>
+                                                <td>
+                                                    @foreach (var roleUser in user.RoleUsers)
+                                                    {
+                                                        <span class="badge bg-secondary me-1">@roleUser.Role.RoleName</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (staff != null)
+                                                    {
+                                                        <span class="badge bg-success">@staff.StaffNm (@staff.StaffCd)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-warning">未連携</span>
+                                                    }
+                                                </td>
+                                                <td>@user.CreatedAt.ToString("yyyy/MM/dd")</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info me-2" @onclick="() => ShowEditDialog(user, staff)">
+                                                        <i class="fas fa-edit"></i> 編集
+                                                    </button>
+                                                    <button class="btn btn-sm btn-warning me-2" @onclick="() => ShowPasswordDialog(user)">
+                                                        <i class="fas fa-key"></i> パスワード
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteDialog(user)">
+                                                        <i class="fas fa-trash"></i> 削除
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- 新規作成/編集モーダル -->
+@if (showUserDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="CloseUserDialog">
+        <div class="modal-dialog modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @if (isEditMode)
+                        {
+                            <text><i class="fas fa-edit me-2"></i>ユーザー編集</text>
+                        }
+                        else
+                        {
+                            <text><i class="fas fa-plus me-2"></i>新規ユーザー追加</text>
+                        }
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseUserDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@userFormModel" OnValidSubmit="@HandleUserSubmit" FormName="UserEditForm">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="userName" class="form-label">ユーザー名 <span class="text-danger">*</span></label>
+                            <InputText id="userName" class="form-control" @bind-Value="userFormModel.UserName" />
+                            <ValidationMessage For="@(() => userFormModel.UserName)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">メールアドレス <span class="text-danger">*</span></label>
+                            <InputText id="email" type="email" class="form-control" @bind-Value="userFormModel.Email" />
+                            <ValidationMessage For="@(() => userFormModel.Email)" />
+                        </div>
+
+                        @if (!isEditMode)
+                        {
+                            <div class="mb-3">
+                                <label for="password" class="form-label">パスワード <span class="text-danger">*</span></label>
+                                <InputText id="password" type="password" class="form-control" @bind-Value="userFormModel.Password" />
+                                <ValidationMessage For="@(() => userFormModel.Password)" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <label for="password" class="form-label">パスワード（変更する場合のみ入力）</label>
+                                <InputText id="password" type="password" class="form-control" @bind-Value="userFormModel.Password" placeholder="変更しない場合は空欄のまま" />
+                                <div class="form-text">パスワードを変更する場合のみ入力してください。空欄の場合は変更されません。入力する場合は6文字以上で入力してください。</div>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label">ロール <span class="text-danger">*</span></label>
+                            @foreach (var role in availableRoles)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="role_@role.RoleId" 
+                                           checked="@userFormModel.SelectedRoles.Contains(role.RoleName)"
+                                           @onchange="@((ChangeEventArgs e) => {
+                                               if ((bool)e.Value!)
+                                                   userFormModel.SelectedRoles.Add(role.RoleName);
+                                               else
+                                                   userFormModel.SelectedRoles.Remove(role.RoleName);
+                                           })" />
+                                    <label class="form-check-label" for="role_@role.RoleId">
+                                        @role.RoleName
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- KPRO連携 -->
+                        <div class="mb-3">
+                            <label class="form-label">KPRO連携（MstStaff）</label>
+                            <div class="input-group mb-2">
+                                <InputText class="form-control" @bind-Value="staffSearchCode" placeholder="担当者コードまたは氏名" />
+                                <button type="button" class="btn btn-outline-secondary" @onclick="SearchStaffForUser" disabled="@isSearchingStaff">
+                                    @if (isSearchingStaff)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            @if (searchedStaffForUser != null)
+                            {
+                                <div class="alert alert-info">
+                                    <strong>@searchedStaffForUser.StaffNm</strong> (@searchedStaffForUser.StaffCd) - @searchedStaffForUser.SerialNo
+                                    <button type="button" class="btn btn-sm btn-success ms-2" @onclick="SelectStaffForUser">
+                                        <i class="fas fa-check"></i> 選択
+                                    </button>
+                                </div>
+                            }
+                            @if (userFormModel.LinkedStaff != null)
+                            {
+                                <div class="alert alert-success">
+                                    <strong>連携済み:</strong> @userFormModel.LinkedStaff.StaffNm (@userFormModel.LinkedStaff.StaffCd)
+                                    <button type="button" class="btn btn-sm btn-danger ms-2" @onclick="ClearStaffLink">
+                                        <i class="fas fa-times"></i> 解除
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseUserDialog">
+                                <i class="fas fa-times me-2"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-save me-2"></i>保存
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- パスワード変更モーダル -->
+@if (showPasswordDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="ClosePasswordDialog">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-key me-2"></i>パスワード変更
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ClosePasswordDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ユーザー: <strong>@passwordChangeUser?.UserName</strong> (@passwordChangeUser?.Email)</label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">現在のパスワード（ハッシュ）</label>
+                        <InputText class="form-control" value="@(passwordChangeUser?.Password ?? "")" readonly style="font-family: monospace; font-size: 0.8em;" />
+                        <div class="form-text">パスワードはBCryptでハッシュ化されています。</div>
+                    </div>
+                    <EditForm Model="@passwordFormModel" OnValidSubmit="@HandlePasswordSubmit" FormName="PasswordChangeForm">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">新しいパスワード <span class="text-danger">*</span></label>
+                            <InputText id="newPassword" type="password" class="form-control" @bind-Value="passwordFormModel.NewPassword" />
+                            <ValidationMessage For="@(() => passwordFormModel.NewPassword)" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">パスワード確認 <span class="text-danger">*</span></label>
+                            <InputText id="confirmPassword" type="password" class="form-control" @bind-Value="passwordFormModel.ConfirmPassword" />
+                            <ValidationMessage For="@(() => passwordFormModel.ConfirmPassword)" />
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" @onclick="ClosePasswordDialog">
+                                <i class="fas fa-times me-2"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isChangingPassword">
+                                @if (isChangingPassword)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="fas fa-save me-2"></i>変更
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 削除確認モーダル -->
+@if (showDeleteDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="CloseDeleteDialog">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle me-2"></i>削除確認
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <p>以下のユーザーを削除してもよろしいですか？</p>
+                    <p class="fw-bold">@userToDelete?.UserName (@userToDelete?.Email)</p>
+                    <p class="text-danger small">※ この操作は取り消せません。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteDialog">
+                        <i class="fas fa-times me-2"></i>キャンセル
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="HandleDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-trash me-2"></i>削除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<(User User, MstStaff? Staff)> users = new();
+    private List<Role> availableRoles = new();
+    private bool isLoading = true;
+    private bool showUserDialog = false;
+    private bool showPasswordDialog = false;
+    private bool showDeleteDialog = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isChangingPassword = false;
+    private bool isDeleting = false;
+    private bool isSearchingStaff = false;
+    private string? successMessage;
+    private string? errorMessage;
+
+    private UserFormModel userFormModel = new();
+    private PasswordFormModel passwordFormModel = new();
+    private User? userToDelete;
+    private User? passwordChangeUser;
+    private string staffSearchCode = string.Empty;
+    private MstStaff? searchedStaffForUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            users = await UserService.GetAllUsersWithStaffAsync();
+            availableRoles = await AuthService.GetAllRolesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error loading users.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateDialog()
+    {
+        userFormModel = new UserFormModel();
+        isEditMode = false;
+        showUserDialog = true;
+    }
+
+    private void ShowEditDialog(User user, MstStaff? staff)
+    {
+        userFormModel = new UserFormModel
+        {
+            UserId = user.UserId,
+            UserName = user.UserName,
+            Email = user.Email,
+            SelectedRoles = user.RoleUsers.Select(ru => ru.Role.RoleName).ToList(),
+            LinkedStaff = staff
+        };
+        isEditMode = true;
+        showUserDialog = true;
+    }
+
+    private void CloseUserDialog()
+    {
+        showUserDialog = false;
+        userFormModel = new UserFormModel();
+        searchedStaffForUser = null;
+        staffSearchCode = string.Empty;
+    }
+
+    private async Task SearchStaffForUser()
+    {
+        if (string.IsNullOrWhiteSpace(staffSearchCode))
+            return;
+
+        isSearchingStaff = true;
+        try
+        {
+            // まず担当者コードで検索
+            var staff = await ReadOnlyDataService.GetStaffByStaffCdAsync(staffSearchCode.Trim());
+            if (staff == null)
+            {
+                // 氏名で検索
+                var staffs = await ReadOnlyDataService.SearchStaffsByNameAsync(staffSearchCode.Trim());
+                if (staffs.Count > 0)
+                {
+                    searchedStaffForUser = staffs.First();
+                }
+            }
+            else
+            {
+                searchedStaffForUser = staff;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error searching staff.");
+            errorMessage = "検索中にエラーが発生しました。";
+        }
+        finally
+        {
+            isSearchingStaff = false;
+        }
+    }
+
+    private void SelectStaffForUser()
+    {
+        if (searchedStaffForUser != null)
+        {
+            userFormModel.LinkedStaff = searchedStaffForUser;
+            searchedStaffForUser = null;
+            staffSearchCode = string.Empty;
+        }
+    }
+
+    private void ClearStaffLink()
+    {
+        userFormModel.LinkedStaff = null;
+    }
+
+    private async Task HandleUserSubmit()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            if (userFormModel.SelectedRoles.Count == 0)
+            {
+                errorMessage = "少なくとも1つのロールを選択してください。";
+                isSaving = false;
+                return;
+            }
+
+            if (isEditMode)
+            {
+                // 更新時はパスワードが空でもOK
+                var success = await AuthService.UpdateUserAsync(userFormModel.UserId, userFormModel.UserName, userFormModel.Email);
+                if (!success)
+                {
+                    errorMessage = "ユーザー情報の更新に失敗しました。メールアドレスが既に使用されている可能性があります。";
+                    isSaving = false;
+                    return;
+                }
+
+                // パスワードが入力されている場合は変更
+                if (!string.IsNullOrWhiteSpace(userFormModel.Password))
+                {
+                    if (userFormModel.Password.Length < 6)
+                    {
+                        errorMessage = "パスワードは6文字以上で入力してください。";
+                        isSaving = false;
+                        return;
+                    }
+                    await AuthService.ChangeUserPasswordAsync(userFormModel.UserId, userFormModel.Password);
+                }
+
+                // ロール更新
+                await AuthService.UpdateUserRolesAsync(userFormModel.UserId, userFormModel.SelectedRoles);
+
+                // KPRO連携
+                if (userFormModel.LinkedStaff != null)
+                {
+                    await UserService.LinkStaffToUserAsync(userFormModel.UserId, userFormModel.LinkedStaff.SerialNo);
+                }
+                else
+                {
+                    // 既存のユーザーから連携を解除
+                    await UserService.UnlinkStaffFromUserAsync(userFormModel.UserId);
+                }
+
+                successMessage = "ユーザー情報を更新しました。";
+            }
+            else
+            {
+                // 新規作成時はパスワード必須
+                if (string.IsNullOrWhiteSpace(userFormModel.Password))
+                {
+                    errorMessage = "パスワードは必須です。";
+                    isSaving = false;
+                    return;
+                }
+
+                if (userFormModel.Password.Length < 6)
+                {
+                    errorMessage = "パスワードは6文字以上で入力してください。";
+                    isSaving = false;
+                    return;
+                }
+
+                // 新規作成
+                var user = await AuthService.RegisterUserAsync(userFormModel.UserName, userFormModel.Email, userFormModel.Password, userFormModel.SelectedRoles.First());
+                if (user == null)
+                {
+                    errorMessage = "ユーザーの作成に失敗しました。メールアドレスが既に使用されている可能性があります。";
+                    isSaving = false;
+                    return;
+                }
+
+                // 複数ロールの設定
+                if (userFormModel.SelectedRoles.Count > 1)
+                {
+                    await AuthService.UpdateUserRolesAsync(user.UserId, userFormModel.SelectedRoles);
+                }
+
+                // KPRO連携
+                if (userFormModel.LinkedStaff != null)
+                {
+                    await UserService.LinkStaffToUserAsync(user.UserId, userFormModel.LinkedStaff.SerialNo);
+                }
+
+                successMessage = "新しいユーザーを作成しました。";
+            }
+
+            CloseUserDialog();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving user.");
+            errorMessage = $"保存に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowPasswordDialog(User user)
+    {
+        passwordChangeUser = user;
+        passwordFormModel = new PasswordFormModel();
+        showPasswordDialog = true;
+    }
+
+    private void ClosePasswordDialog()
+    {
+        showPasswordDialog = false;
+        passwordChangeUser = null;
+        passwordFormModel = new PasswordFormModel();
+    }
+
+    private async Task HandlePasswordSubmit()
+    {
+        if (passwordChangeUser == null)
+            return;
+
+        if (passwordFormModel.NewPassword != passwordFormModel.ConfirmPassword)
+        {
+            errorMessage = "パスワードが一致しません。";
+            return;
+        }
+
+        isChangingPassword = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var success = await AuthService.ChangeUserPasswordAsync(passwordChangeUser.UserId, passwordFormModel.NewPassword);
+            if (success)
+            {
+                successMessage = "パスワードを変更しました。";
+                ClosePasswordDialog();
+                await LoadData();
+            }
+            else
+            {
+                errorMessage = "パスワードの変更に失敗しました。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error changing password.");
+            errorMessage = $"パスワード変更中にエラーが発生しました: {ex.Message}";
+        }
+        finally
+        {
+            isChangingPassword = false;
+        }
+    }
+
+    private void ShowDeleteDialog(User user)
+    {
+        userToDelete = user;
+        showDeleteDialog = true;
+    }
+
+    private void CloseDeleteDialog()
+    {
+        showDeleteDialog = false;
+        userToDelete = null;
+    }
+
+    private async Task HandleDelete()
+    {
+        if (userToDelete == null)
+            return;
+
+        isDeleting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var success = await AuthService.DeleteUserAsync(userToDelete.UserId);
+            if (success)
+            {
+                successMessage = $"「{userToDelete.UserName}」を削除しました。";
+                CloseDeleteDialog();
+                await LoadData();
+            }
+            else
+            {
+                errorMessage = "ユーザーの削除に失敗しました。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting user.");
+            errorMessage = $"削除中にエラーが発生しました: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    public class UserFormModel
+    {
+        public int UserId { get; set; }
+
+        [Required(ErrorMessage = "ユーザー名は必須です。")]
+        [MaxLength(100, ErrorMessage = "ユーザー名は100文字以内で入力してください。")]
+        public string UserName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "メールアドレスは必須です。")]
+        [EmailAddress(ErrorMessage = "有効なメールアドレスを入力してください。")]
+        [MaxLength(255, ErrorMessage = "メールアドレスは255文字以内で入力してください。")]
+        public string Email { get; set; } = string.Empty;
+
+        // パスワードは編集時は任意、新規作成時は必須（コード側でバリデーション）
+        public string Password { get; set; } = string.Empty;
+
+        public List<string> SelectedRoles { get; set; } = new();
+        public MstStaff? LinkedStaff { get; set; }
+    }
+
+    public class PasswordFormModel
+    {
+        [Required(ErrorMessage = "新しいパスワードは必須です。")]
+        [MinLength(6, ErrorMessage = "パスワードは6文字以上で入力してください。")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "パスワード確認は必須です。")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}
+

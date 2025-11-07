@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
 
 <div class="page">
     <div class="sidebar">
@@ -6,8 +7,24 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row px-4" style="display: flex !important; align-items: center !important; justify-content: flex-end !important; height: 3.5rem !important; min-height: 3.5rem !important; background-color: #f7f7f7 !important; border-bottom: 1px solid #d6d5d5 !important; position: relative !important; z-index: 100 !important; width: 100% !important;">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="d-flex align-items-center gap-3">
+                        <a href="my-profile" class="top-bar-icon-btn" title="マイプロフィール" style="text-decoration: none; color: #333; padding: 0.5rem; border-radius: 0.25rem; transition: background-color 0.2s;">
+                            <i class="fas fa-user-circle" style="font-size: 1.25rem;"></i>
+                        </a>
+                        <a href="logout" class="top-bar-icon-btn" title="ログアウト" style="text-decoration: none; color: #333; padding: 0.5rem; border-radius: 0.25rem; transition: background-color 0.2s;">
+                            <i class="fas fa-sign-out-alt" style="font-size: 1.25rem;"></i>
+                        </a>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="login" class="btn btn-link text-dark" style="text-decoration: none;">
+                        <i class="fas fa-sign-in-alt me-2"></i>ログイン
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">

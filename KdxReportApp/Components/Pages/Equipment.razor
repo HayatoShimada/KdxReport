@@ -1,10 +1,12 @@
 @page "/equipment"
 @using KdxReport.Services
 @using KdxReport.Models
+@using KPRO_Library.Models.Generated
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject EquipmentService EquipmentService
+@inject CompanyService CompanyService
 @inject NavigationManager Navigation
 
 <PageTitle>設備管理 - 出張報告書システム</PageTitle>
@@ -61,6 +63,7 @@
                                 <thead>
                                     <tr>
                                         <th>設備名</th>
+                                        <th>会社</th>
                                         <th>トータルカウンタ数</th>
                                         <th>登録日</th>
                                         <th>操作</th>
@@ -70,17 +73,27 @@
                                     @if (equipmentList.Count == 0)
                                     {
                                         <tr>
-                                            <td colspan="4" class="text-center py-4">
+                                            <td colspan="5" class="text-center py-4">
                                                 <i class="fas fa-inbox me-2"></i>設備が登録されていません。
                                             </td>
                                         </tr>
                                     }
                                     else
                                     {
-                                        @foreach (var equipment in equipmentList)
+                                        @foreach (var (equipment, company) in equipmentListWithCompany)
                                         {
                                             <tr>
                                                 <td>@equipment.EquipmentName</td>
+                                                <td>
+                                                    @if (company != null)
+                                                    {
+                                                        <span>@company.CompanyNm (@company.CustomerCd)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">未設定</span>
+                                                    }
+                                                </td>
                                                 <td>
                                                     @if (equipment.TotalCounter.HasValue)
                                                     {
@@ -135,6 +148,18 @@
                     <EditForm Model="@currentEquipment" OnValidSubmit="@HandleSubmit" FormName="EquipmentEditForm">
                         <DataAnnotationsValidator />
                         <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="companyCd" class="form-label">会社</label>
+                            <InputSelect id="companyCd" class="form-select" @bind-Value="currentEquipment.CompanyCd" TValue="string">
+                                <option value="">未選択</option>
+                                @foreach (var company in companies)
+                                {
+                                    <option value="@company.CustomerCd">@company.CompanyNm (@company.CustomerCd)</option>
+                                }
+                            </InputSelect>
+                            <div class="form-text">外部DB（MstCustomer）の会社を選択してください。</div>
+                        </div>
 
                         <div class="mb-3">
                             <label for="equipmentName" class="form-label">設備名 <span class="text-danger">*</span></label>
@@ -201,6 +226,8 @@
 
 @code {
     private List<Models.Equipment> equipmentList = new();
+    private List<(Models.Equipment Equipment, MstCustomer? Company)> equipmentListWithCompany = new();
+    private List<MstCustomer> companies = new();
     private Models.Equipment currentEquipment = new();
     private Models.Equipment? equipmentToDelete;
 
@@ -216,7 +243,20 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadCompanies();
         await LoadEquipment();
+    }
+
+    private async Task LoadCompanies()
+    {
+        try
+        {
+            companies = await CompanyService.GetAllCustomersAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"会社データの読み込みに失敗しました: {ex.Message}";
+        }
     }
 
     private async Task LoadEquipment()
@@ -225,6 +265,18 @@
         try
         {
             equipmentList = await EquipmentService.GetAllEquipmentAsync();
+            
+            // 会社情報と紐づけ（EquipmentのCompanyCdはMstCustomerのCustomerCdを保存）
+            equipmentListWithCompany = new List<(Models.Equipment Equipment, MstCustomer? Company)>();
+            foreach (var equipment in equipmentList)
+            {
+                MstCustomer? company = null;
+                if (!string.IsNullOrEmpty(equipment.CompanyCd))
+                {
+                    company = await CompanyService.GetCustomerByIdAsync(equipment.CompanyCd);
+                }
+                equipmentListWithCompany.Add((equipment, company));
+            }
         }
         catch (Exception ex)
         {
@@ -248,6 +300,7 @@
         currentEquipment = new Models.Equipment
         {
             EquipmentId = equipment.EquipmentId,
+            CompanyCd = equipment.CompanyCd,
             EquipmentName = equipment.EquipmentName,
             TotalCounter = equipment.TotalCounter
         };

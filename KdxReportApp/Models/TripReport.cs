@@ -11,21 +11,21 @@ public class TripReport
     public int TripReportId { get; set; }
 
     /// <summary>
-    /// 外部DB（MstCompany）の会社コード
+    /// KPRO（MstCompany）の会社コード
     /// </summary>
     [MaxLength(50)]
     [Column("company_cd")]
     public string CompanyCd { get; set; } = string.Empty;
 
     /// <summary>
-    /// 外部DB（MstCustomerContact）の得意先コード
+    /// KPRO（MstCustomerContact）の得意先コード
     /// </summary>
     [MaxLength(50)]
     [Column("customer_cd")]
     public string CustomerCd { get; set; } = string.Empty;
 
     /// <summary>
-    /// 外部DB（MstCustomerContact）の担当者コード
+    /// KPRO（MstCustomerContact）の担当者コード
     /// </summary>
     [MaxLength(50)]
     [Column("staff_cd")]
