@@ -3,6 +3,7 @@ using System;
 using KdxReport.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KdxReport.Migrations
 {
     [DbContext(typeof(KdxReportDbContext))]
-    partial class KdxReportDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251107005808_AddStaffSerialNoToUser")]
+    partial class AddStaffSerialNoToUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -123,6 +126,86 @@ namespace KdxReport.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("comments");
+                });
+
+            modelBuilder.Entity("KdxReport.Models.Company", b =>
+                {
+                    b.Property<int>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("company_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CompanyId"));
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("company_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("CompanyId");
+
+                    b.ToTable("companies");
+                });
+
+            modelBuilder.Entity("KdxReport.Models.CompanyContact", b =>
+                {
+                    b.Property<int>("ContactId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("contact_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ContactId"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("ContactId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("company_contacts");
                 });
 
             modelBuilder.Entity("KdxReport.Models.Equipment", b =>
@@ -309,11 +392,9 @@ namespace KdxReport.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ThreadId"));
 
-                    b.Property<string>("CompanyCd")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("company_cd");
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer")
+                        .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -342,6 +423,8 @@ namespace KdxReport.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.HasKey("ThreadId");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("EquipmentId");
 
@@ -380,11 +463,13 @@ namespace KdxReport.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("companions");
 
-                    b.Property<string>("CompanyCd")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("company_cd");
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer")
+                        .HasColumnName("company_id");
+
+                    b.Property<int>("ContactId")
+                        .HasColumnType("integer")
+                        .HasColumnName("contact_id");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -397,21 +482,9 @@ namespace KdxReport.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CustomerCd")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("customer_cd");
-
                     b.Property<int>("EquipmentId")
                         .HasColumnType("integer")
                         .HasColumnName("equipment_id");
-
-                    b.Property<string>("StaffCd")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("staff_cd");
 
                     b.Property<string>("Submitter")
                         .IsRequired()
@@ -436,6 +509,10 @@ namespace KdxReport.Migrations
                     b.HasKey("TripReportId");
 
                     b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ContactId");
 
                     b.HasIndex("EquipmentId");
 
@@ -531,6 +608,17 @@ namespace KdxReport.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("KdxReport.Models.CompanyContact", b =>
+                {
+                    b.HasOne("KdxReport.Models.Company", "Company")
+                        .WithMany("CompanyContacts")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("KdxReport.Models.ReadStatus", b =>
                 {
                     b.HasOne("KdxReport.Models.TripReport", "TripReport")
@@ -571,6 +659,12 @@ namespace KdxReport.Migrations
 
             modelBuilder.Entity("KdxReport.Models.Thread", b =>
                 {
+                    b.HasOne("KdxReport.Models.Company", "Company")
+                        .WithMany("Threads")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("KdxReport.Models.Equipment", "Equipment")
                         .WithMany("Threads")
                         .HasForeignKey("EquipmentId");
@@ -578,6 +672,8 @@ namespace KdxReport.Migrations
                     b.HasOne("KdxReport.Models.TripReport", "TripReport")
                         .WithMany("Threads")
                         .HasForeignKey("TripReportId");
+
+                    b.Navigation("Company");
 
                     b.Navigation("Equipment");
 
@@ -591,6 +687,18 @@ namespace KdxReport.Migrations
                         .HasForeignKey("ApprovedBy")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("KdxReport.Models.Company", "Company")
+                        .WithMany("TripReports")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KdxReport.Models.CompanyContact", "Contact")
+                        .WithMany("TripReports")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("KdxReport.Models.Equipment", "Equipment")
                         .WithMany("TripReports")
                         .HasForeignKey("EquipmentId")
@@ -599,12 +707,30 @@ namespace KdxReport.Migrations
 
                     b.Navigation("Approver");
 
+                    b.Navigation("Company");
+
+                    b.Navigation("Contact");
+
                     b.Navigation("Equipment");
                 });
 
             modelBuilder.Entity("KdxReport.Models.Comment", b =>
                 {
                     b.Navigation("Replies");
+                });
+
+            modelBuilder.Entity("KdxReport.Models.Company", b =>
+                {
+                    b.Navigation("CompanyContacts");
+
+                    b.Navigation("Threads");
+
+                    b.Navigation("TripReports");
+                });
+
+            modelBuilder.Entity("KdxReport.Models.CompanyContact", b =>
+                {
+                    b.Navigation("TripReports");
                 });
 
             modelBuilder.Entity("KdxReport.Models.Equipment", b =>

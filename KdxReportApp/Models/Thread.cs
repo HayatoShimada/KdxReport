@@ -10,8 +10,12 @@ public class Thread
     [Column("thread_id")]
     public int ThreadId { get; set; }
 
-    [Column("company_id")]
-    public int CompanyId { get; set; }
+    /// <summary>
+    /// 外部DB（MstCompany）の会社コード
+    /// </summary>
+    [MaxLength(50)]
+    [Column("company_cd")]
+    public string CompanyCd { get; set; } = string.Empty;
 
     [Column("equipment_id")]
     public int? EquipmentId { get; set; }
@@ -31,9 +35,6 @@ public class Thread
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties
-    [ForeignKey("CompanyId")]
-    public Company Company { get; set; } = null!;
-
     [ForeignKey("EquipmentId")]
     public Equipment? Equipment { get; set; }
 

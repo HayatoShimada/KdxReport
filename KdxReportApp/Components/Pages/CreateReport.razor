@@ -1,9 +1,11 @@
 @page "/reports/create"
 @using KdxReport.Services
 @using KdxReport.Models
+@using KPRO_Library.Models.Generated
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize]
+@rendermode InteractiveServer
 @inject TripReportService TripReportService
 @inject CompanyService CompanyService
 @inject EquipmentService EquipmentService
@@ -40,35 +42,48 @@
 
                         <!-- 会社選択 -->
                         <div class="mb-3">
-                            <label for="companyId" class="form-label">会社 <span class="text-danger">*</span></label>
-                            <InputSelect id="companyId" class="form-select" @bind-Value="reportModel.CompanyId" @onchange="OnCompanyChanged">
-                                <option value="0">-- 会社を選択してください --</option>
+                            <label for="companyCd" class="form-label">会社 <span class="text-danger">*</span></label>
+                            <InputSelect id="companyCd" class="form-select" @bind-Value="reportModel.CompanyCd" @bind-Value:event="onchange">
+                                <option value="">-- 会社を選択してください --</option>
                                 @foreach (var company in companies)
                                 {
-                                    <option value="@company.CompanyId">@company.CompanyName</option>
+                                    <option value="@company.CompanyCd">@company.CompanyNm</option>
                                 }
                             </InputSelect>
-                            <ValidationMessage For="@(() => reportModel.CompanyId)" />
+                            <ValidationMessage For="@(() => reportModel.CompanyCd)" />
+                        </div>
+
+                        <!-- 取引先選択 -->
+                        <div class="mb-3">
+                            <label for="customerCd" class="form-label">取引先 <span class="text-danger">*</span></label>
+                            <InputSelect id="customerCd" class="form-select" TValue="string" value="@reportModel.CustomerCd" @onchange="OnCustomerChanged" disabled="@(customers.Count == 0)">
+                                <option value="">-- 取引先を選択してください --</option>
+                                @foreach (var customer in customers)
+                                {
+                                    <option value="@customer.CustomerCd">@customer.CompanyNm</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => reportModel.CustomerCd)" />
                         </div>
 
                         <!-- 担当者選択 -->
                         <div class="mb-3">
-                            <label for="contactId" class="form-label">担当者 <span class="text-danger">*</span></label>
-                            <InputSelect id="contactId" class="form-select" @bind-Value="reportModel.ContactId" disabled="@(companyContacts.Count == 0)">
-                                <option value="0">-- 担当者を選択してください --</option>
+                            <label for="staffCd" class="form-label">担当者 <span class="text-danger">*</span></label>
+                            <InputSelect id="staffCd" class="form-select" @bind-Value="reportModel.StaffCd" disabled="@(companyContacts.Count == 0)">
+                                <option value="">-- 担当者を選択してください --</option>
                                 @foreach (var contact in companyContacts)
                                 {
-                                    <option value="@contact.ContactId">@contact.ContactName</option>
+                                    <option value="@contact.StaffCd">@contact.StaffNm</option>
                                 }
                             </InputSelect>
-                            @if (reportModel.CompanyId > 0 && companyContacts.Count == 0)
+                            @if (!string.IsNullOrEmpty(reportModel.CustomerCd) && companyContacts.Count == 0)
                             {
                                 <div class="form-text text-warning">
                                     <i class="fas fa-exclamation-triangle me-1"></i>
-                                    この会社には担当者が登録されていません。先に担当者を登録してください。
+                                    この取引先には担当者が登録されていません。
                                 </div>
                             }
-                            <ValidationMessage For="@(() => reportModel.ContactId)" />
+                            <ValidationMessage For="@(() => reportModel.StaffCd)" />
                         </div>
 
                         <!-- 設備選択 -->
@@ -191,8 +206,9 @@
     [SupplyParameterFromForm]
     private ReportFormModel reportModel { get; set; } = new();
 
-    private List<Company> companies = new();
-    private List<CompanyContact> companyContacts = new();
+    private List<MstCompany> companies = new();
+    private List<MstCustomer> customers = new();
+    private List<MstCustomerContact> companyContacts = new();
     private List<Models.Equipment> equipmentList = new();
     private List<IBrowserFile> selectedFiles = new();
 
@@ -212,6 +228,7 @@
 
             // マスターデータを読み込み
             companies = await CompanyService.GetAllCompaniesAsync();
+            customers = await CompanyService.GetAllCustomersAsync();
             equipmentList = await EquipmentService.GetAllEquipmentAsync();
 
             // デフォルトの日付を設定
@@ -225,18 +242,22 @@
         }
     }
 
-    private async Task OnCompanyChanged(ChangeEventArgs e)
+    private async Task OnCustomerChanged(ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out int companyId) && companyId > 0)
+        var customerCd = e.Value?.ToString() ?? string.Empty;
+        reportModel.CustomerCd = customerCd;
+        
+        if (!string.IsNullOrEmpty(customerCd))
         {
-            companyContacts = await CompanyService.GetContactsByCompanyIdAsync(companyId);
-            reportModel.ContactId = 0; // Reset contact selection
+            companyContacts = await CompanyService.GetContactsByCustomerCdAsync(customerCd);
+            reportModel.StaffCd = string.Empty; // Reset contact selection
         }
         else
         {
             companyContacts.Clear();
-            reportModel.ContactId = 0;
+            reportModel.StaffCd = string.Empty;
         }
+        await Task.CompletedTask;
         StateHasChanged();
     }
 
@@ -288,14 +309,21 @@
         try
         {
             // バリデーション
-            if (reportModel.CompanyId == 0)
+            if (string.IsNullOrEmpty(reportModel.CompanyCd))
             {
                 errorMessage = "会社を選択してください。";
                 isSubmitting = false;
                 return;
             }
 
-            if (reportModel.ContactId == 0)
+            if (string.IsNullOrEmpty(reportModel.CustomerCd))
+            {
+                errorMessage = "取引先を選択してください。";
+                isSubmitting = false;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(reportModel.StaffCd))
             {
                 errorMessage = "担当者を選択してください。";
                 isSubmitting = false;
@@ -319,8 +347,9 @@
             // 報告書を作成
             var tripReport = new TripReport
             {
-                CompanyId = reportModel.CompanyId,
-                ContactId = reportModel.ContactId,
+                CompanyCd = reportModel.CompanyCd,
+                CustomerCd = reportModel.CustomerCd,
+                StaffCd = reportModel.StaffCd,
                 EquipmentId = reportModel.EquipmentId,
                 TripStartDate = reportModel.TripStartDate,
                 TripEndDate = reportModel.TripEndDate,
@@ -388,8 +417,9 @@
 
     public class ReportFormModel
     {
-        public int CompanyId { get; set; }
-        public int ContactId { get; set; }
+        public string CompanyCd { get; set; } = string.Empty;
+        public string CustomerCd { get; set; } = string.Empty;
+        public string StaffCd { get; set; } = string.Empty;
         public int EquipmentId { get; set; }
         public DateTime TripStartDate { get; set; }
         public DateTime TripEndDate { get; set; }

@@ -3,6 +3,7 @@
 @using KdxReport.Models
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
+@rendermode InteractiveServer
 @inject TripReportService TripReportService
 @inject NavigationManager Navigation
 
@@ -77,8 +78,8 @@
                                         {
                                             <tr style="cursor: pointer;" @onclick="() => ViewReport(report.TripReportId)">
                                                 <td>@report.TripReportId</td>
-                                                <td>@report.Company?.CompanyName</td>
-                                                <td>@report.Contact?.ContactName</td>
+                                                <td>@report.CompanyCd</td>
+                                                <td>@report.CustomerCd / @report.StaffCd</td>
                                                 <td>@report.Equipment?.EquipmentName</td>
                                                 <td>
                                                     @report.TripStartDate.ToString("yyyy/MM/dd") - @report.TripEndDate.ToString("yyyy/MM/dd")

@@ -52,6 +52,23 @@ services:
       - kdxreport-network
     restart: unless-stopped
 
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: kpro-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "YourPassword123"
+      MSSQL_PID: "Developer"
+      TZ: Asia/Tokyo
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./kpro-init:/docker-entrypoint-initdb.d
+    networks:
+      - kdxreport-network
+    restart: unless-stopped
+
   app:
     build:
       context: ./KdxReportApp
@@ -65,12 +82,14 @@ services:
       MinIO__SecretKey: "minioadmin"
       MinIO__BucketName: "kdxreport"
       MinIO__UseSSL: "false"
+      ExternalDatabase__ConnectionString: "Server=sqlserver;Database=CompanyDB;User Id=sa;Password=YourPassword123;TrustServerCertificate=true;"
       TZ: Asia/Tokyo
     ports:
       - "8080:8080"
     depends_on:
       - postgres
       - minio
+      - sqlserver
     networks:
       - kdxreport-network
     restart: unless-stopped
@@ -78,6 +97,7 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  sqlserver_data:
 
 networks:
   kdxreport-network:

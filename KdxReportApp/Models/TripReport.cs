@@ -10,11 +10,26 @@ public class TripReport
     [Column("trip_report_id")]
     public int TripReportId { get; set; }
 
-    [Column("company_id")]
-    public int CompanyId { get; set; }
+    /// <summary>
+    /// 外部DB（MstCompany）の会社コード
+    /// </summary>
+    [MaxLength(50)]
+    [Column("company_cd")]
+    public string CompanyCd { get; set; } = string.Empty;
 
-    [Column("contact_id")]
-    public int ContactId { get; set; }
+    /// <summary>
+    /// 外部DB（MstCustomerContact）の得意先コード
+    /// </summary>
+    [MaxLength(50)]
+    [Column("customer_cd")]
+    public string CustomerCd { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 外部DB（MstCustomerContact）の担当者コード
+    /// </summary>
+    [MaxLength(50)]
+    [Column("staff_cd")]
+    public string StaffCd { get; set; } = string.Empty;
 
     [Column("equipment_id")]
     public int EquipmentId { get; set; }
@@ -56,12 +71,6 @@ public class TripReport
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties
-    [ForeignKey("CompanyId")]
-    public Company Company { get; set; } = null!;
-
-    [ForeignKey("ContactId")]
-    public CompanyContact Contact { get; set; } = null!;
-
     [ForeignKey("EquipmentId")]
     public Equipment Equipment { get; set; } = null!;
 

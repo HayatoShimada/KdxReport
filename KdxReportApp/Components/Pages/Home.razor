@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize]
+@rendermode InteractiveServer
 @inject TripReportService TripReportService
 @inject AuthService AuthService
 @inject NavigationManager Navigation
@@ -114,7 +115,7 @@
                                     {
                                         <tr>
                                             <td>@report.CreatedAt.ToString("yyyy/MM/dd")</td>
-                                            <td>@report.Company.CompanyName</td>
+                                            <td>@report.CompanyCd</td>
                                             <td>@report.Equipment.EquipmentName</td>
                                             <td>@report.TripStartDate.ToString("yyyy/MM/dd") ～ @report.TripEndDate.ToString("yyyy/MM/dd")</td>
                                             <td>@report.Submitter</td>
@@ -177,7 +178,7 @@
                                     {
                                         <tr>
                                             <td>@report.CreatedAt.ToString("yyyy/MM/dd")</td>
-                                            <td>@report.Company.CompanyName</td>
+                                            <td>@report.CompanyCd</td>
                                             <td>@report.Equipment.EquipmentName</td>
                                             <td>@report.TripStartDate.ToString("yyyy/MM/dd") ～ @report.TripEndDate.ToString("yyyy/MM/dd")</td>
                                             <td>@report.Submitter</td>

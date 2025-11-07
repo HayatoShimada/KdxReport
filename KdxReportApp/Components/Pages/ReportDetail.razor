@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Markdig
 @attribute [Authorize]
+@rendermode InteractiveServer
 @inject TripReportService TripReportService
 @inject AuthService AuthService
 @inject FileStorageService FileStorageService
@@ -137,10 +138,10 @@
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <strong>会社:</strong> @report.Company?.CompanyName
+                                <strong>会社:</strong> @report.CompanyCd
                             </div>
                             <div class="col-md-6">
-                                <strong>担当者:</strong> @report.Contact?.ContactName
+                                <strong>担当者:</strong> @report.CustomerCd / @report.StaffCd
                             </div>
                         </div>
                         <div class="row mb-3">

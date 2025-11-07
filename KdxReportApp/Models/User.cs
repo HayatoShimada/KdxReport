@@ -31,6 +31,13 @@ public class User
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// MstStaffの登録番号（SerialNo）との紐づけ
+    /// </summary>
+    [MaxLength(50)]
+    [Column("staff_serial_no")]
+    public string? StaffSerialNo { get; set; }
+
     // Navigation properties
     public ICollection<RoleUser> RoleUsers { get; set; } = new List<RoleUser>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();

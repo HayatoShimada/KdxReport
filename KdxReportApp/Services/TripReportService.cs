@@ -32,8 +32,6 @@ public class TripReportService
     {
         // Get all trip reports that the user hasn't read yet
         var unreadReports = await _context.TripReports
-            .Include(tr => tr.Company)
-            .Include(tr => tr.Contact)
             .Include(tr => tr.Equipment)
             .Include(tr => tr.Approver)
             .Where(tr => !_context.ReadStatuses.Any(rs => rs.UserId == userId && rs.TripReportId == tr.TripReportId && rs.IsRead))
@@ -50,8 +48,6 @@ public class TripReportService
     public async Task<List<TripReport>> GetPendingApprovalReportsAsync()
     {
         return await _context.TripReports
-            .Include(tr => tr.Company)
-            .Include(tr => tr.Contact)
             .Include(tr => tr.Equipment)
             .Where(tr => tr.ApprovalStatus == "pending")
             .OrderByDescending(tr => tr.CreatedAt)
@@ -65,10 +61,23 @@ public class TripReportService
     public async Task<List<TripReport>> GetAllReportsAsync()
     {
         return await _context.TripReports
-            .Include(tr => tr.Company)
-            .Include(tr => tr.Contact)
             .Include(tr => tr.Equipment)
             .Include(tr => tr.Approver)
+            .OrderByDescending(tr => tr.CreatedAt)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// 指定ユーザーが提出した出張報告書一覧を取得します。
+    /// </summary>
+    /// <param name="submitterName">提出者名。</param>
+    /// <returns>提出したレポートのリスト。</returns>
+    public async Task<List<TripReport>> GetReportsBySubmitterAsync(string submitterName)
+    {
+        return await _context.TripReports
+            .Include(tr => tr.Equipment)
+            .Include(tr => tr.Approver)
+            .Where(tr => tr.Submitter == submitterName)
             .OrderByDescending(tr => tr.CreatedAt)
             .ToListAsync();
     }
@@ -81,8 +90,6 @@ public class TripReportService
     public async Task<TripReport?> GetReportByIdAsync(int tripReportId)
     {
         return await _context.TripReports
-            .Include(tr => tr.Company)
-            .Include(tr => tr.Contact)
             .Include(tr => tr.Equipment)
             .Include(tr => tr.Approver)
             .Include(tr => tr.Threads)

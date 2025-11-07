@@ -1,96 +1,65 @@
-using KdxReport.Data;
-using KdxReport.Models;
-using Microsoft.EntityFrameworkCore;
+using KPRO_Library.Models.Generated;
+using KPRO_Library.Services;
 
 namespace KdxReport.Services;
 
+/// <summary>
+/// 外部DB（KPRO_Library）の会社・取引先情報を取得するサービス（読み取り専用）
+/// </summary>
 public class CompanyService
 {
-    private readonly KdxReportDbContext _context;
+    private readonly ReadOnlyDataService _readOnlyDataService;
 
-    public CompanyService(KdxReportDbContext context)
+    public CompanyService(ReadOnlyDataService readOnlyDataService)
     {
-        _context = context;
+        _readOnlyDataService = readOnlyDataService;
     }
 
-    public async Task<List<Company>> GetAllCompaniesAsync()
+    /// <summary>
+    /// すべての会社（MstCompany）を取得
+    /// </summary>
+    public async Task<List<MstCompany>> GetAllCompaniesAsync()
     {
-        return await _context.Companies
-            .Include(c => c.CompanyContacts)
-            .OrderBy(c => c.CompanyName)
-            .ToListAsync();
+        return await _readOnlyDataService.GetAllCompaniesAsync();
     }
 
-    public async Task<Company?> GetCompanyByIdAsync(int companyId)
+    /// <summary>
+    /// 会社コードで会社（MstCompany）を取得
+    /// </summary>
+    public async Task<MstCompany?> GetCompanyByIdAsync(string companyCd)
     {
-        return await _context.Companies
-            .Include(c => c.CompanyContacts)
-            .FirstOrDefaultAsync(c => c.CompanyId == companyId);
+        return await _readOnlyDataService.GetCompanyByIdAsync(companyCd);
     }
 
-    public async Task<Company> CreateCompanyAsync(Company company)
+    /// <summary>
+    /// すべての取引先（MstCustomer）を取得
+    /// </summary>
+    public async Task<List<MstCustomer>> GetAllCustomersAsync()
     {
-        _context.Companies.Add(company);
-        await _context.SaveChangesAsync();
-        return company;
+        return await _readOnlyDataService.GetAllCustomersAsync();
     }
 
-    public async Task<bool> UpdateCompanyAsync(Company company)
+    /// <summary>
+    /// 取引先コードで取引先（MstCustomer）を取得
+    /// </summary>
+    public async Task<MstCustomer?> GetCustomerByIdAsync(string customerCd)
     {
-        _context.Companies.Update(company);
-        await _context.SaveChangesAsync();
-        return true;
+        return await _readOnlyDataService.GetCustomerByIdAsync(customerCd);
     }
 
-    public async Task<bool> DeleteCompanyAsync(int companyId)
+    /// <summary>
+    /// 得意先コードで担当者（MstCustomerContact）一覧を取得
+    /// </summary>
+    public async Task<List<MstCustomerContact>> GetContactsByCustomerCdAsync(string customerCd)
     {
-        var company = await _context.Companies.FindAsync(companyId);
-        if (company == null)
-            return false;
-
-        _context.Companies.Remove(company);
-        await _context.SaveChangesAsync();
-        return true;
+        return await _readOnlyDataService.GetCustomerContactsByCustomerCdAsync(customerCd);
     }
 
-    // Company Contact methods
-    public async Task<List<CompanyContact>> GetContactsByCompanyIdAsync(int companyId)
+    /// <summary>
+    /// 得意先コードと担当者コードで担当者（MstCustomerContact）を取得
+    /// </summary>
+    public async Task<MstCustomerContact?> GetContactByIdAsync(string customerCd, string staffCd)
     {
-        return await _context.CompanyContacts
-            .Where(cc => cc.CompanyId == companyId)
-            .OrderBy(cc => cc.ContactName)
-            .ToListAsync();
-    }
-
-    public async Task<CompanyContact?> GetContactByIdAsync(int contactId)
-    {
-        return await _context.CompanyContacts
-            .Include(cc => cc.Company)
-            .FirstOrDefaultAsync(cc => cc.ContactId == contactId);
-    }
-
-    public async Task<CompanyContact> CreateContactAsync(CompanyContact contact)
-    {
-        _context.CompanyContacts.Add(contact);
-        await _context.SaveChangesAsync();
-        return contact;
-    }
-
-    public async Task<bool> UpdateContactAsync(CompanyContact contact)
-    {
-        _context.CompanyContacts.Update(contact);
-        await _context.SaveChangesAsync();
-        return true;
-    }
-
-    public async Task<bool> DeleteContactAsync(int contactId)
-    {
-        var contact = await _context.CompanyContacts.FindAsync(contactId);
-        if (contact == null)
-            return false;
-
-        _context.CompanyContacts.Remove(contact);
-        await _context.SaveChangesAsync();
-        return true;
+        return await _readOnlyDataService.GetCustomerContactByIdAsync(customerCd, staffCd);
     }
 }

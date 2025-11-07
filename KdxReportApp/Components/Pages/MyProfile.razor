@@ -1,0 +1,405 @@
+@page "/my-profile"
+@using KdxReport.Services
+@using KdxReport.Models
+@using KPRO_Library.Models.Generated
+@using KPRO_Library.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AuthService AuthService
+@inject UserService UserService
+@inject TripReportService TripReportService
+@inject ReadOnlyDataService ReadOnlyDataService
+@inject NavigationManager Navigation
+@inject ILogger<MyProfile> Logger
+
+<PageTitle>マイプロフィール - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-user-circle me-2"></i>マイプロフィール
+            </h2>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else if (currentUser == null)
+    {
+        <div class="alert alert-danger">
+            ユーザー情報の取得に失敗しました。
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- 左側: 基本情報と設定 -->
+            <div class="col-lg-4">
+                <!-- ユーザー基本情報 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user me-2"></i>基本情報
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ユーザー名</label>
+                            <p class="form-control-plaintext">@currentUser.UserName</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">メールアドレス</label>
+                            <p class="form-control-plaintext">@currentUser.Email</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">登録日</label>
+                            <p class="form-control-plaintext">@currentUser.CreatedAt.ToString("yyyy年MM月dd日")</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ロール</label>
+                            <div>
+                                @foreach (var roleUser in currentUser.RoleUsers)
+                                {
+                                    <span class="badge bg-secondary me-1">@roleUser.Role.RoleName</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MstStaff連携 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-link me-2"></i>外部DB連携（MstStaff）
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (linkedStaff != null)
+                        {
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <strong>連携済み</strong>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">担当者コード</label>
+                                <p class="form-control-plaintext">@linkedStaff.StaffCd</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">担当者名</label>
+                                <p class="form-control-plaintext">@linkedStaff.StaffNm</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">登録番号</label>
+                                <p class="form-control-plaintext">@linkedStaff.SerialNo</p>
+                            </div>
+                            <button class="btn btn-danger btn-sm" @onclick="ShowUnlinkDialog">
+                                <i class="fas fa-unlink me-2"></i>連携解除
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                外部DB（MstStaff）と連携されていません。
+                            </div>
+                            <div class="mb-3">
+                                <label for="staffSearch" class="form-label">担当者コードで検索</label>
+                                <div class="input-group">
+                                    <InputText id="staffSearch" class="form-control" @bind-Value="staffSearchCode" placeholder="担当者コード" />
+                                    <button class="btn btn-primary" @onclick="SearchStaff" disabled="@isSearchingStaff">
+                                        @if (isSearchingStaff)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        <i class="fas fa-search me-2"></i>検索
+                                    </button>
+                                </div>
+                            </div>
+                            @if (searchedStaff != null)
+                            {
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h6 class="card-title">検索結果</h6>
+                                        <p class="mb-1"><strong>担当者コード:</strong> @searchedStaff.StaffCd</p>
+                                        <p class="mb-1"><strong>担当者名:</strong> @searchedStaff.StaffNm</p>
+                                        <p class="mb-1"><strong>登録番号:</strong> @searchedStaff.SerialNo</p>
+                                        <button class="btn btn-success btn-sm mt-2" @onclick="LinkStaff">
+                                            <i class="fas fa-link me-2"></i>この担当者と連携
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(staffSearchError))
+                            {
+                                <div class="alert alert-danger">@staffSearchError</div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                <!-- 設定変更 -->
+                <div class="card shadow">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cog me-2"></i>設定
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/change-password" class="btn btn-outline-primary">
+                                <i class="fas fa-key me-2"></i>パスワード変更
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側: 提出した出張報告書一覧 -->
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-file-alt me-2"></i>提出した出張報告書
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (myReports == null || myReports.Count == 0)
+                        {
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                提出した出張報告書はありません。
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>報告書ID</th>
+                                            <th>会社</th>
+                                            <th>出張期間</th>
+                                            <th>承認状況</th>
+                                            <th>作成日</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var report in myReports)
+                                        {
+                                            <tr>
+                                                <td>@report.TripReportId</td>
+                                                <td>@report.CompanyCd</td>
+                                                <td>
+                                                    @report.TripStartDate.ToString("yyyy/MM/dd") ～ 
+                                                    @report.TripEndDate.ToString("yyyy/MM/dd")
+                                                </td>
+                                                <td>
+                                                    @if (report.ApprovalStatus == "approved")
+                                                    {
+                                                        <span class="badge bg-success">承認済み</span>
+                                                    }
+                                                    else if (report.ApprovalStatus == "rejected")
+                                                    {
+                                                        <span class="badge bg-danger">却下</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-warning">承認待ち</span>
+                                                    }
+                                                </td>
+                                                <td>@report.CreatedAt.ToString("yyyy/MM/dd HH:mm")</td>
+                                                <td>
+                                                    <a href="/reports/@report.TripReportId" class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-eye me-1"></i>詳細
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- 連携解除確認ダイアログ -->
+@if (showUnlinkDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">連携解除の確認</h5>
+                    <button type="button" class="btn-close" @onclick="CloseUnlinkDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <p>外部DB（MstStaff）との連携を解除しますか？</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseUnlinkDialog">キャンセル</button>
+                    <button type="button" class="btn btn-danger" @onclick="UnlinkStaff" disabled="@isUnlinking">
+                        @if (isUnlinking)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        連携解除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private User? currentUser;
+    private MstStaff? linkedStaff;
+    private List<TripReport>? myReports;
+    private bool isLoading = true;
+    private bool isSearchingStaff = false;
+    private bool isUnlinking = false;
+    private string staffSearchCode = string.Empty;
+    private MstStaff? searchedStaff;
+    private string? staffSearchError;
+    private bool showUnlinkDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                // 紐づけられたMstStaff情報を取得
+                var userWithStaff = await UserService.GetUserWithStaffAsync(currentUser.UserId);
+                if (userWithStaff.HasValue)
+                {
+                    linkedStaff = userWithStaff.Value.Staff;
+                }
+
+                // 提出した出張報告書を取得
+                myReports = await TripReportService.GetReportsBySubmitterAsync(currentUser.UserName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading profile data.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchStaff()
+    {
+        if (string.IsNullOrWhiteSpace(staffSearchCode))
+        {
+            staffSearchError = "担当者コードを入力してください。";
+            return;
+        }
+
+        isSearchingStaff = true;
+        staffSearchError = null;
+        searchedStaff = null;
+
+        try
+        {
+            searchedStaff = await ReadOnlyDataService.GetStaffByStaffCdAsync(staffSearchCode.Trim());
+            if (searchedStaff == null)
+            {
+                staffSearchError = "該当する担当者が見つかりませんでした。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error searching staff.");
+            staffSearchError = "検索中にエラーが発生しました。";
+        }
+        finally
+        {
+            isSearchingStaff = false;
+        }
+    }
+
+    private async Task LinkStaff()
+    {
+        if (searchedStaff == null || currentUser == null)
+            return;
+
+        try
+        {
+            var success = await UserService.LinkStaffToUserAsync(currentUser.UserId, searchedStaff.SerialNo);
+            if (success)
+            {
+                linkedStaff = searchedStaff;
+                searchedStaff = null;
+                staffSearchCode = string.Empty;
+                staffSearchError = null;
+                StateHasChanged();
+            }
+            else
+            {
+                staffSearchError = "連携に失敗しました。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error linking staff.");
+            staffSearchError = "連携中にエラーが発生しました。";
+        }
+    }
+
+    private void ShowUnlinkDialog()
+    {
+        showUnlinkDialog = true;
+    }
+
+    private void CloseUnlinkDialog()
+    {
+        showUnlinkDialog = false;
+    }
+
+    private async Task UnlinkStaff()
+    {
+        if (currentUser == null)
+            return;
+
+        isUnlinking = true;
+        try
+        {
+            var success = await UserService.UnlinkStaffFromUserAsync(currentUser.UserId);
+            if (success)
+            {
+                linkedStaff = null;
+                showUnlinkDialog = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error unlinking staff.");
+        }
+        finally
+        {
+            isUnlinking = false;
+        }
+    }
+}
+

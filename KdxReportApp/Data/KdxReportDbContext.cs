@@ -13,8 +13,6 @@ public class KdxReportDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Role> Roles { get; set; }
     public DbSet<RoleUser> RoleUsers { get; set; }
-    public DbSet<Company> Companies { get; set; }
-    public DbSet<CompanyContact> CompanyContacts { get; set; }
     public DbSet<Equipment> Equipment { get; set; }
     public DbSet<TripReport> TripReports { get; set; }
     public DbSet<Models.Thread> Threads { get; set; }
@@ -50,24 +48,6 @@ public class KdxReportDbContext : DbContext
         modelBuilder.Entity<RoleUser>(entity =>
         {
             entity.HasIndex(e => new { e.RoleId, e.UserId }).IsUnique();
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        // Company configurations
-        modelBuilder.Entity<Company>(entity =>
-        {
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        // CompanyContact configurations
-        modelBuilder.Entity<CompanyContact>(entity =>
-        {
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt)
