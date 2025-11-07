@@ -311,6 +311,7 @@ KPRO_Library/Models/Generated/
 KPRO_Library/Data/CompanyDbContext.cs
 
 # Sensitive data
+appsettings.json
 appsettings.Production.json
 appsettings.Development.json
 secrets.json

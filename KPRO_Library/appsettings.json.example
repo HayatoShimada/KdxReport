@@ -1,0 +1,33 @@
+{
+  "ExternalDatabase": {
+    "_comment": "KPRO_Libraryは読み取り専用システムです。セキュリティのため、読み取り権限のみを持つDBユーザーを使用してください。",
+
+    "ConnectionString": "Server=YOUR_SERVER;Database=YOUR_DATABASE;User Id=YOUR_USER_ID;Password=YOUR_PASSWORD;TrustServerCertificate=true;",
+
+    "_connectionString_examples": {
+      "read_only_user": "Server=localhost;Database=CompanyDB;User Id=kpro_readonly;Password=SecurePassword;TrustServerCertificate=true;",
+      "windows_auth": "Server=localhost;Database=CompanyDB;Integrated Security=true;TrustServerCertificate=true;",
+      "external_server": "Server=YOUR_SERVER;Database=YOUR_DATABASE;User Id=YOUR_USER_ID;Password=YOUR_PASSWORD;TrustServerCertificate=true;"
+    },
+
+    "CompanyTableName": "Companies",
+
+    "ColumnMappings": {
+      "CompanyId": "company_id",
+      "CompanyName": "company_name",
+      "CompanyCode": "company_code",
+      "PostalCode": "postal_code",
+      "Address": "address",
+      "PhoneNumber": "phone_number",
+      "FaxNumber": "fax_number",
+      "Email": "email",
+      "Remarks": "remarks",
+      "CreatedAt": "created_at",
+      "UpdatedAt": "updated_at",
+      "IsActive": "is_active"
+    },
+
+    "CommandTimeout": 30,
+    "ExcludeInactive": true
+  }
+}

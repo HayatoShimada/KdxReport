@@ -1,0 +1,25 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=kdxreport;Username=YOUR_USERNAME;Password=YOUR_PASSWORD;Timezone=Asia/Tokyo"
+  },
+  "MinIO": {
+    "Endpoint": "localhost:9000",
+    "AccessKey": "YOUR_ACCESS_KEY",
+    "SecretKey": "YOUR_SECRET_KEY",
+    "BucketName": "kdxreport",
+    "UseSSL": false
+  },
+  "ExternalDatabase": {
+    "ConnectionString": "Server=YOUR_SERVER;Database=YOUR_DATABASE;User Id=YOUR_USER_ID;Password=YOUR_PASSWORD;TrustServerCertificate=true;Connection Timeout=60;",
+    "CommandTimeout": 30,
+    "ExcludeInactive": true
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+
