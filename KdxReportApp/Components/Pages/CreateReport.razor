@@ -44,7 +44,7 @@
                         <!-- 会社選択（MstCompany） -->
                         <div class="mb-3">
                             <label for="companyCd" class="form-label">会社 <span class="text-danger">*</span></label>
-                            <InputSelect id="companyCd" class="form-select" TValue="string" @bind-Value="reportModel.CompanyCd" @bind-Value:event="onchange">
+                            <InputSelect id="companyCd" class="form-select" TValue="string" @bind-Value="reportModel.CompanyCd">
                                 <option value="">-- 会社を選択してください --</option>
                                 @foreach (var company in companies)
                                 {
@@ -57,13 +57,52 @@
                         <!-- 取引先選択（MstCustomer） -->
                         <div class="mb-3">
                             <label for="customerCd" class="form-label">取引先 <span class="text-danger">*</span></label>
-                            <InputSelect id="customerCd" class="form-select" TValue="string" @bind-Value="reportModel.CustomerCd" @bind-Value:after="OnCustomerChanged" disabled="@(customers.Count == 0)">
-                                <option value="">-- 取引先を選択してください --</option>
-                                @foreach (var customer in customers)
+                            
+                            <!-- 検索入力 -->
+                            <div class="input-group mb-2">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <InputText 
+                                    id="customerSearch" 
+                                    class="form-control" 
+                                    @bind-Value="customerSearchTerm" 
+                                    placeholder="取引先名、コードで検索..." 
+                                    disabled="@(customers.Count == 0)" />
+                                <button class="btn btn-primary" type="button" @onclick="FilterCustomers" disabled="@(customers.Count == 0)" title="検索">
+                                    <i class="fas fa-search"></i> 検索
+                                </button>
+                                @if (!string.IsNullOrEmpty(customerSearchTerm))
                                 {
-                                    <option value="@customer.CustomerCd">@customer.CompanyNm</option>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ClearCustomerSearch" title="検索をクリア">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                }
+                            </div>
+                            
+                            <!-- 取引先選択ドロップダウン -->
+                            <InputSelect id="customerCd" class="form-select" TValue="string" @bind-Value="reportModel.CustomerCd" @bind-Value:after="OnCustomerChanged" disabled="@(filteredCustomers.Count == 0)">
+                                <option value="">-- 取引先を選択してください --</option>
+                                @if (filteredCustomers.Count == 0 && !string.IsNullOrEmpty(customerSearchTerm))
+                                {
+                                    <option value="" disabled>検索条件に一致する取引先が見つかりませんでした</option>
+                                }
+                                else
+                                {
+                                    @foreach (var customer in filteredCustomers)
+                                    {
+                                        <option value="@customer.CustomerCd">@customer.CompanyNm (@customer.CustomerCd)</option>
+                                    }
                                 }
                             </InputSelect>
+                            <div class="form-text">
+                                @if (string.IsNullOrEmpty(customerSearchTerm))
+                                {
+                                    <text>取引先数: <strong>@customers.Count</strong> 件</text>
+                                }
+                                else
+                                {
+                                    <text>検索結果: <strong>@filteredCustomers.Count</strong> 件 / 全 <strong>@customers.Count</strong> 件</text>
+                                }
+                            </div>
                             <ValidationMessage For="@(() => reportModel.CustomerCd)" />
                         </div>
 
@@ -90,13 +129,36 @@
                         <!-- 設備選択 -->
                         <div class="mb-3">
                             <label for="equipmentId" class="form-label">設備 <span class="text-danger">*</span></label>
-                            <InputSelect id="equipmentId" class="form-select" @bind-Value="reportModel.EquipmentId">
+                            <InputSelect id="equipmentId" class="form-select" @bind-Value="reportModel.EquipmentId" disabled="@(string.IsNullOrEmpty(reportModel.CustomerCd) || filteredEquipmentList.Count == 0)">
                                 <option value="0">-- 設備を選択してください --</option>
-                                @foreach (var equipment in equipmentList)
+                                @if (string.IsNullOrEmpty(reportModel.CustomerCd))
                                 {
-                                    <option value="@equipment.EquipmentId">@equipment.EquipmentName</option>
+                                    <option value="0" disabled>取引先を選択してください</option>
+                                }
+                                else if (filteredEquipmentList.Count == 0)
+                                {
+                                    <option value="0" disabled>この取引先に紐づく設備がありません</option>
+                                }
+                                else
+                                {
+                                    @foreach (var equipment in filteredEquipmentList)
+                                    {
+                                        <option value="@equipment.EquipmentId">@equipment.EquipmentName</option>
+                                    }
                                 }
                             </InputSelect>
+                            @if (!string.IsNullOrEmpty(reportModel.CustomerCd))
+                            {
+                                <div class="form-text">
+                                    取引先に紐づく設備: <strong>@filteredEquipmentList.Count</strong> 件
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="form-text text-muted">
+                                    取引先を選択すると、その取引先に紐づく設備が表示されます
+                                </div>
+                            }
                             <ValidationMessage For="@(() => reportModel.EquipmentId)" />
                         </div>
 
@@ -112,6 +174,14 @@
                                 <InputDate id="tripEndDate" class="form-control" @bind-Value="reportModel.TripEndDate" />
                                 <ValidationMessage For="@(() => reportModel.TripEndDate)" />
                             </div>
+                        </div>
+
+                        <!-- タイトル -->
+                        <div class="mb-3">
+                            <label for="title" class="form-label">報告書タイトル <span class="text-danger">*</span></label>
+                            <InputText id="title" class="form-control" @bind-Value="reportModel.Title" placeholder="例: ○○社様 設備点検報告" />
+                            <div class="form-text">報告書の内容を簡潔に表すタイトルを入力してください（200文字以内）</div>
+                            <ValidationMessage For="@(() => reportModel.Title)" />
                         </div>
 
                         <!-- 提出者 -->
@@ -246,10 +316,13 @@
 
     private List<MstCompany> companies = new();
     private List<MstCustomer> customers = new();
+    private List<MstCustomer> filteredCustomers = new();
     private List<MstCustomerContact> companyContacts = new();
-    private List<Models.Equipment> equipmentList = new();
+    private List<Models.Equipment> allEquipmentList = new();
+    private List<Models.Equipment> filteredEquipmentList = new();
     private List<IBrowserFile> selectedFiles = new();
 
+    private string customerSearchTerm = string.Empty;
     private bool isSubmitting = false;
     private string? errorMessage;
     private string previewHtml = string.Empty;
@@ -274,7 +347,8 @@
             // マスターデータを読み込み（KPRO接続は別途処理）
             try
             {
-                equipmentList = await EquipmentService.GetAllEquipmentAsync();
+                allEquipmentList = await EquipmentService.GetAllEquipmentAsync();
+                filteredEquipmentList = new List<Models.Equipment>(); // 初期状態では空（取引先選択後にフィルタリング）
             }
             catch (Exception ex)
             {
@@ -302,6 +376,7 @@
             try
             {
                 customers = await CompanyService.GetAllCustomersAsync();
+                filteredCustomers = customers; // 初期表示は全件
             }
             catch (System.Threading.Tasks.TaskCanceledException)
             {
@@ -327,19 +402,51 @@
         }
     }
 
+    private void FilterCustomers()
+    {
+        if (string.IsNullOrWhiteSpace(customerSearchTerm))
+        {
+            filteredCustomers = customers;
+        }
+        else
+        {
+            var term = customerSearchTerm.Trim().ToLowerInvariant();
+            filteredCustomers = customers
+                .Where(c => 
+                    (c.CompanyNm != null && c.CompanyNm.ToLowerInvariant().Contains(term)) ||
+                    (c.CompanyAb != null && c.CompanyAb.ToLowerInvariant().Contains(term)) ||
+                    (c.CustomerCd != null && c.CustomerCd.ToLowerInvariant().Contains(term))
+                )
+                .ToList();
+        }
+    }
+
+    private void ClearCustomerSearch()
+    {
+        customerSearchTerm = string.Empty;
+        FilterCustomers();
+    }
+
     private async Task OnCustomerChanged()
     {
         var customerCd = reportModel.CustomerCd;
         
         if (!string.IsNullOrEmpty(customerCd))
         {
+            // 担当者を取得
             companyContacts = await CompanyService.GetContactsByCustomerCdAsync(customerCd);
             reportModel.StaffCd = string.Empty; // Reset contact selection
+
+            // 取引先に紐づく設備を取得
+            filteredEquipmentList = await EquipmentService.GetEquipmentByCustomerCdAsync(customerCd);
+            reportModel.EquipmentId = 0; // Reset equipment selection
         }
         else
         {
             companyContacts.Clear();
             reportModel.StaffCd = string.Empty;
+            filteredEquipmentList.Clear();
+            reportModel.EquipmentId = 0;
         }
         StateHasChanged();
     }
@@ -411,18 +518,23 @@
         return $"{len:0.##} {sizes[order]}";
     }
 
-    private async Task HandleSubmit()
+    private async Task HandleSubmit(EditContext editContext)
     {
         isSubmitting = true;
         errorMessage = null;
 
         try
         {
+            // デバッグ用: 現在の値をログに出力
+            Logger.LogInformation("HandleSubmit: CompanyCd = '{CompanyCd}', CustomerCd = '{CustomerCd}'", 
+                reportModel.CompanyCd ?? "(null)", reportModel.CustomerCd ?? "(null)");
+
             // バリデーション
-            if (string.IsNullOrEmpty(reportModel.CompanyCd))
+            if (string.IsNullOrWhiteSpace(reportModel.CompanyCd))
             {
                 errorMessage = "会社を選択してください。";
                 isSubmitting = false;
+                StateHasChanged();
                 return;
             }
 
@@ -462,6 +574,7 @@
                 EquipmentId = reportModel.EquipmentId,
                 TripStartDate = reportModel.TripStartDate,
                 TripEndDate = reportModel.TripEndDate,
+                Title = reportModel.Title,
                 Submitter = reportModel.Submitter,
                 Companions = reportModel.Companions,
                 Content = reportModel.Content,
@@ -532,6 +645,7 @@
         public int EquipmentId { get; set; }
         public DateTime TripStartDate { get; set; }
         public DateTime TripEndDate { get; set; }
+        public string Title { get; set; } = string.Empty;
         public string Submitter { get; set; } = string.Empty;
         public string? Companions { get; set; }
         public string Content { get; set; } = string.Empty;

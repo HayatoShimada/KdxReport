@@ -1,0 +1,161 @@
+@page "/threads"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject TripReportService TripReportService
+@inject NavigationManager Navigation
+
+<PageTitle>スレッド一覧 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-comments me-2"></i>スレッド一覧
+            </h2>
+            @if (!string.IsNullOrEmpty(CompanyCd))
+            {
+                <p class="text-muted">会社コード: <strong>@CompanyCd</strong> でフィルタリング中</p>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>スレッドID</th>
+                                        <th>スレッド名</th>
+                                        <th>会社コード</th>
+                                        <th>設備</th>
+                                        <th>報告書ID</th>
+                                        <th>コメント数</th>
+                                        <th>添付ファイル数</th>
+                                        <th>作成日</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (threads.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center py-4">
+                                                <i class="fas fa-inbox me-2"></i>スレッドが登録されていません。
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var thread in threads)
+                                        {
+                                            <tr>
+                                                <td>@thread.ThreadId</td>
+                                                <td><strong>@thread.ThreadName</strong></td>
+                                                <td>@thread.CompanyCd</td>
+                                                <td>@(thread.Equipment?.EquipmentName ?? "-")</td>
+                                                <td>
+                                                    @if (thread.TripReportId.HasValue)
+                                                    {
+                                                        <a href="/reports/@thread.TripReportId" class="text-decoration-none">@thread.TripReportId</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@thread.Comments.Count</td>
+                                                <td>@thread.Attachments.Count</td>
+                                                <td>@thread.CreatedAt.ToString("yyyy/MM/dd HH:mm")</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info" @onclick="() => ViewThread(thread.ThreadId)">
+                                                        <i class="fas fa-eye"></i> 詳細
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? CompanyCd { get; set; }
+
+    private List<Models.Thread> threads = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadThreads();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadThreads();
+    }
+
+    private async Task LoadThreads()
+    {
+        isLoading = true;
+        try
+        {
+            if (!string.IsNullOrEmpty(CompanyCd))
+            {
+                threads = await TripReportService.GetThreadsByCompanyCdAsync(CompanyCd);
+            }
+            else
+            {
+                threads = await TripReportService.GetAllThreadsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ViewThread(int threadId)
+    {
+        // スレッド詳細ページが存在する場合はそこに遷移
+        // 現在は報告書詳細ページに遷移（スレッドが報告書に紐づいている場合）
+        Navigation.NavigateTo($"/threads/{threadId}");
+    }
+}
+

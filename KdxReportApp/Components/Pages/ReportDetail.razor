@@ -2,6 +2,7 @@
 @using KdxReport.Services
 @using KdxReport.Models
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using Markdig
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -52,12 +53,13 @@
 
         <!-- ヘッダー -->
         <div class="row mb-4">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <h2>
-                    <i class="fas fa-file-alt me-2"></i>報告書 #@report.TripReportId
+                    <i class="fas fa-file-alt me-2"></i>@report.Title
                 </h2>
+                <p class="text-muted">報告書 #@report.TripReportId</p>
             </div>
-            <div class="col-md-6 text-md-end">
+            <div class="col-md-4 text-md-end">
                 <button class="btn btn-secondary" @onclick="BackToList">
                     <i class="fas fa-arrow-left me-2"></i>一覧に戻る
                 </button>
@@ -149,7 +151,8 @@
                                 <strong>設備:</strong> @report.Equipment?.EquipmentName
                             </div>
                             <div class="col-md-6">
-                                <strong>出張期間:</strong> @report.TripStartDate.ToString("yyyy/MM/dd") 〜 @report.TripEndDate.ToString("yyyy/MM/dd")
+                                <strong>出張期間:</strong> @report.TripStartDate.ToString("yyyy/MM/dd") 〜
+                                @report.TripEndDate.ToString("yyyy/MM/dd")
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -157,18 +160,19 @@
                                 <strong>提出者:</strong> @report.Submitter
                             </div>
                             <div class="col-md-6">
-                                <strong>同伴者:</strong> @(string.IsNullOrWhiteSpace(report.Companions) ? "なし" : report.Companions)
-                            </div>
+                                <strong>同伴者:</strong> @(string.IsNullOrWhiteSpace(report.Companions) ? "なし" :
+                                                            report.Companions)
                         </div>
-                        <div class="row">
-                            <div class="col-12">
-                                <strong>作成日:</strong> @report.CreatedAt.ToString("yyyy/MM/dd HH:mm")
-                            </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <strong>作成日:</strong> @report.CreatedAt.ToString("yyyy/MM/dd HH:mm")
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
         <!-- 報告内容 -->
         <div class="row mb-4">
@@ -185,7 +189,7 @@
         </div>
 
         <!-- 添付ファイル -->
-        @if (attachments.Count > 0)
+    @if (attachments.Count > 0)
         {
             <div class="row mb-4">
                 <div class="col-12">
@@ -227,8 +231,122 @@
                 </div>
             </div>
         }
+
+        <!-- スレッド・コメント -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-comments me-2"></i>スレッド・コメント</h5>
+                        <button class="btn btn-light btn-sm" @onclick="ShowNewThreadDialog">
+                            <i class="fas fa-plus me-1"></i>新規スレッド作成
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (threads.Count == 0)
+                        {
+                            <div class="text-center py-4 text-muted">
+                                <i class="fas fa-comments fa-3x mb-3"></i>
+                                <p>まだスレッドがありません。新規スレッドを作成してください。</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var thread in threads)
+                            {
+                                <div class="thread-item mb-4 border-bottom pb-4">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div>
+                                            <h6 class="mb-1">
+                                                <i class="fas fa-comment-dots me-2"></i>@thread.ThreadName
+                                            </h6>
+                                            <small class="text-muted">
+                                                作成日: @thread.CreatedAt.ToString("yyyy/MM/dd HH:mm")
+                                                @if (thread.UpdatedAt != thread.CreatedAt)
+                                                {
+                                                    <span> | 最終更新: @thread.UpdatedAt.ToString("yyyy/MM/dd HH:mm")</span>
+                                                }
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <!-- コメント一覧 -->
+                                    @{
+                                        var topLevelComments = thread.Comments.Where(c => c.ParentCommentId == null).OrderBy(c =>
+                                        c.CreatedAt).ToList();
+                                    }
+                                    @foreach (var comment in topLevelComments)
+                                    {
+                                        <div class="comment-item mb-3">
+                                            @RenderComment(comment, 0)
+                                        </div>
+                                    }
+
+                                    @if (topLevelComments.Count == 0)
+                                    {
+                                        <div class="text-muted small mb-3">まだコメントがありません。</div>
+                                    }
+
+                                    <!-- 新規コメント投稿フォーム -->
+                                    <div class="new-comment-form mt-3">
+                                        <div class="input-group">
+                                            <textarea 
+                                                class="form-control" 
+                                                value="@GetNewCommentText(thread.ThreadId)"
+                                                @oninput="@((ChangeEventArgs e) => SetNewCommentText(thread.ThreadId, e.Value?.ToString() ?? string.Empty))"
+                                                placeholder="コメントを入力してください..." 
+                                                rows="2">@GetNewCommentText(thread.ThreadId)</textarea>
+                                            <button class="btn btn-primary" @onclick="() => PostComment(thread.ThreadId, null)"
+                                                disabled="@isPostingComment">
+                                                <i class="fas fa-paper-plane me-1"></i>投稿
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    }
     }
 </div>
+
+<!-- 新規スレッド作成モーダル -->
+@if (showNewThreadDialog)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);"
+        @onclick="CloseNewThreadDialog">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus me-2"></i>新規スレッド作成</h5>
+                    <button type="button" class="btn-close" @onclick="CloseNewThreadDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newThreadName" class="form-label">スレッド名 <span class="text-danger">*</span></label>
+                        <InputText id="newThreadName" class="form-control" @bind-Value="newThreadName"
+                            placeholder="例: 報告内容について" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseNewThreadDialog">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateNewThread"
+                        disabled="@(string.IsNullOrWhiteSpace(newThreadName) || isCreatingThread)">
+                        @if (isCreatingThread)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-check me-1"></i>作成
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 <style>
     .markdown-content {
@@ -255,7 +373,8 @@
         margin-bottom: 0.5rem;
     }
 
-    .markdown-content ul, .markdown-content ol {
+    .markdown-content ul,
+    .markdown-content ol {
         margin-left: 1.5rem;
         margin-bottom: 1rem;
     }
@@ -292,6 +411,7 @@
 
     private TripReport? report;
     private List<Attachment> attachments = new();
+    private List<Models.Thread> threads = new();
     private string renderedContent = string.Empty;
     private bool isLoading = true;
     private bool isProcessing = false;
@@ -299,6 +419,12 @@
     private string? successMessage;
     private string? errorMessage;
     private int currentUserId;
+    private bool showNewThreadDialog = false;
+    private string newThreadName = string.Empty;
+    private bool isCreatingThread = false;
+    private bool isPostingComment = false;
+    private Dictionary<int, string> newCommentTexts = new(); // threadId -> comment text
+    private Dictionary<int, int?> replyingTo = new(); // threadId -> parentCommentId
 
     protected override async Task OnInitializedAsync()
     {
@@ -338,8 +464,11 @@
 
                 // 添付ファイルを取得
                 attachments = report.Threads
-                    .SelectMany(t => t.Attachments)
-                    .ToList();
+                .SelectMany(t => t.Attachments)
+                .ToList();
+
+                // スレッドを取得
+                threads = await TripReportService.GetThreadsByReportIdAsync(ReportId);
 
                 // 既読マークを付ける
                 if (currentUserId > 0)
@@ -453,5 +582,196 @@
     private void BackToList()
     {
         Navigation.NavigateTo("/reports");
+    }
+
+    private void ShowNewThreadDialog()
+    {
+        newThreadName = string.Empty;
+        showNewThreadDialog = true;
+    }
+
+    private void CloseNewThreadDialog()
+    {
+        showNewThreadDialog = false;
+        newThreadName = string.Empty;
+    }
+
+    private async Task CreateNewThread()
+    {
+        if (string.IsNullOrWhiteSpace(newThreadName))
+        {
+            errorMessage = "スレッド名を入力してください。";
+            return;
+        }
+
+        isCreatingThread = true;
+        errorMessage = null;
+
+        try
+        {
+            await TripReportService.CreateThreadForReportAsync(ReportId, newThreadName.Trim());
+            successMessage = "スレッドを作成しました。";
+            CloseNewThreadDialog();
+            await LoadReportAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"スレッドの作成に失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error creating thread for report {ReportId}", ReportId);
+        }
+        finally
+        {
+            isCreatingThread = false;
+        }
+    }
+
+    private string GetNewCommentText(int threadId)
+    {
+        if (!newCommentTexts.ContainsKey(threadId))
+        {
+            newCommentTexts[threadId] = string.Empty;
+        }
+        return newCommentTexts[threadId];
+    }
+
+    private void SetNewCommentText(int threadId, string value)
+    {
+        newCommentTexts[threadId] = value;
+    }
+
+    private async Task PostComment(int threadId, int? parentCommentId)
+    {
+        var commentText = GetNewCommentText(threadId);
+        if (string.IsNullOrWhiteSpace(commentText))
+        {
+            errorMessage = "コメントを入力してください。";
+            return;
+        }
+
+        if (currentUserId == 0)
+        {
+            errorMessage = "ログインが必要です。";
+            return;
+        }
+
+        isPostingComment = true;
+        errorMessage = null;
+
+        try
+        {
+            await TripReportService.AddCommentToThreadAsync(threadId, currentUserId, commentText.Trim(), parentCommentId);
+            successMessage = parentCommentId.HasValue ? "返信を投稿しました。" : "コメントを投稿しました。";
+            newCommentTexts[threadId] = string.Empty;
+            replyingTo[threadId] = null;
+            await LoadReportAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"コメントの投稿に失敗しました: {ex.Message}";
+            Logger.LogError(ex, "Error posting comment to thread {ThreadId}", threadId);
+        }
+        finally
+        {
+            isPostingComment = false;
+        }
+    }
+
+    private void StartReply(int threadId, int parentCommentId)
+    {
+        replyingTo[threadId] = parentCommentId;
+        StateHasChanged();
+    }
+
+    private void CancelReply(int threadId)
+    {
+        replyingTo[threadId] = null;
+        StateHasChanged();
+    }
+
+    private RenderFragment RenderComment(Comment comment, int depth)
+    {
+        return builder =>
+        {
+            var sequence = 0;
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", $"comment-box mb-2" + (depth > 0 ? $" ms-{depth * 3}" : ""));
+            if (depth > 0)
+            {
+                builder.AddAttribute(sequence++, "style", "border-left: 3px solid #dee2e6; padding-left: 1rem;");
+            }
+
+            // コメントヘッダー
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "d-flex justify-content-between align-items-start mb-2");
+
+            builder.OpenElement(sequence++, "div");
+            builder.OpenElement(sequence++, "strong");
+            builder.AddContent(sequence++, comment.User?.UserName ?? "不明なユーザー");
+            builder.CloseElement();
+            builder.AddMarkupContent(sequence++, $" <small class=\"text-muted\">{comment.CreatedAt:yyyy/MM/dd HH:mm}</small>");
+            builder.CloseElement();
+
+            // 返信ボタン
+            if (depth < 3) // 最大3階層まで
+            {
+                builder.OpenElement(sequence++, "button");
+                builder.AddAttribute(sequence++, "class", "btn btn-sm btn-outline-secondary");
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => StartReply(comment.ThreadId, comment.CommentId)));
+                builder.AddContent(sequence++, "返信");
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+
+            // コメント内容
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "comment-content mb-2");
+            builder.AddContent(sequence++, comment.CommentContent);
+            builder.CloseElement();
+
+            // 返信フォーム（該当する場合）
+            if (replyingTo.ContainsKey(comment.ThreadId) && replyingTo[comment.ThreadId] == comment.CommentId)
+            {
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", "reply-form mt-2 mb-3");
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", "input-group");
+
+                builder.OpenElement(sequence++, "textarea");
+                builder.AddAttribute(sequence++, "class", "form-control");
+                builder.AddAttribute(sequence++, "rows", 2);
+                builder.AddAttribute(sequence++, "placeholder", "返信を入力してください...");
+                builder.AddAttribute(sequence++, "value", GetNewCommentText(comment.ThreadId));
+                builder.AddAttribute(sequence++, "onchange", EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this, e => SetNewCommentText(comment.ThreadId, e.Value?.ToString() ?? string.Empty)));
+                builder.AddContent(sequence++, GetNewCommentText(comment.ThreadId));
+                builder.CloseElement();
+
+                builder.OpenElement(sequence++, "button");
+                builder.AddAttribute(sequence++, "class", "btn btn-primary");
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => PostComment(comment.ThreadId, comment.CommentId)));
+                builder.AddAttribute(sequence++, "disabled", isPostingComment);
+                builder.AddContent(sequence++, "投稿");
+                builder.CloseElement();
+
+                builder.OpenElement(sequence++, "button");
+                builder.AddAttribute(sequence++, "class", "btn btn-secondary");
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => CancelReply(comment.ThreadId)));
+                builder.AddContent(sequence++, "キャンセル");
+                builder.CloseElement();
+
+                builder.CloseElement();
+                builder.CloseElement();
+            }
+
+            // 返信コメント
+            if (comment.Replies != null && comment.Replies.Any())
+            {
+                foreach (var reply in comment.Replies.OrderBy(r => r.CreatedAt))
+                {
+                    builder.AddContent(sequence++, RenderComment(reply, depth + 1));
+                }
+            }
+
+            builder.CloseElement();
+        };
     }
 }

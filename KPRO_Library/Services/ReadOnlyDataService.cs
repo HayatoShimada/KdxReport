@@ -62,6 +62,33 @@ public class ReadOnlyDataService
             .FirstOrDefaultAsync(c => c.CustomerCd == customerCd);
     }
 
+    /// <summary>
+    /// 取引先名で取引先マスタを検索（部分一致）
+    /// </summary>
+    public async Task<List<MstCustomer>> SearchCustomersByNameAsync(string searchTerm)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return await GetAllCustomersAsync();
+        }
+
+        var term = searchTerm.Trim();
+        return await _context.MstCustomers
+            .AsNoTracking()
+            .Where(c => 
+                (c.CompanyNm != null && c.CompanyNm.Contains(term)) ||
+                (c.CompanyAb != null && c.CompanyAb.Contains(term)) ||
+                (c.CompanyKn != null && c.CompanyKn.Contains(term)) ||
+                (c.CustomerCd != null && c.CustomerCd.Contains(term)) ||
+                (c.Address1 != null && c.Address1.Contains(term)) ||
+                (c.Tel != null && c.Tel.Contains(term)) ||
+                (c.Tel2 != null && c.Tel2.Contains(term))
+            )
+            .OrderBy(c => c.CompanyNm)
+            .Take(200) // 最大200件まで
+            .ToListAsync();
+    }
+
     #endregion
 
     #region MstCustomerContact

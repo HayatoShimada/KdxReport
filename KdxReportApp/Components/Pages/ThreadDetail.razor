@@ -1,0 +1,360 @@
+@page "/threads/{ThreadId:int}"
+@using KdxReport.Services
+@using KdxReport.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject TripReportService TripReportService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>スレッド詳細 - 出張報告書システム</PageTitle>
+
+<div class="container-fluid mt-4">
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">読み込み中...</span>
+            </div>
+        </div>
+    }
+    else if (thread == null)
+    {
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            スレッドが見つかりませんでした。
+        </div>
+        <a href="/threads" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>スレッド一覧に戻る
+        </a>
+    }
+    else
+    {
+        <!-- スレッド情報 -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">
+                        <i class="fas fa-comments me-2"></i>@thread.ThreadName
+                    </h3>
+                    <button class="btn btn-light btn-sm" @onclick="NavigateBack">
+                        <i class="fas fa-arrow-left me-1"></i>戻る
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>スレッドID:</strong> @thread.ThreadId</p>
+                        <p><strong>会社コード:</strong> @thread.CompanyCd</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>作成日時:</strong> @thread.CreatedAt.ToString("yyyy/MM/dd HH:mm")</p>
+                        <p><strong>更新日時:</strong> @thread.UpdatedAt.ToString("yyyy/MM/dd HH:mm")</p>
+                    </div>
+                </div>
+                @if (thread.TripReportId.HasValue)
+                {
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-file-alt me-2"></i>
+                        この報告書に紐づいています:
+                        <a href="/reports/@thread.TripReportId" class="alert-link">報告書 #@thread.TripReportId</a>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- コメント一覧 -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-light">
+                <h4 class="mb-0">
+                    <i class="fas fa-comment me-2"></i>コメント (@comments.Count 件)
+                </h4>
+            </div>
+            <div class="card-body">
+                @if (comments.Count == 0)
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <p>まだコメントがありません。最初のコメントを投稿してください。</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var comment in comments)
+                    {
+                        <div class="card mb-3 @(comment.ParentCommentId == null ? "border-primary" : "ms-5 border-secondary")">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <strong class="text-primary">
+                                            <i class="fas fa-user me-1"></i>
+                                            @comment.User?.UserName
+                                        </strong>
+                                        <small class="text-muted ms-2">
+                                            @comment.CreatedAt.ToString("yyyy/MM/dd HH:mm")
+                                        </small>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowReplyForm(comment.CommentId)">
+                                        <i class="fas fa-reply me-1"></i>返信
+                                    </button>
+                                </div>
+                                <div class="comment-content">
+                                    @comment.CommentContent
+                                </div>
+
+                                <!-- 返信フォーム -->
+                                @if (replyToCommentId == comment.CommentId)
+                                {
+                                    <div class="mt-3 p-3 bg-light rounded">
+                                        <h6><i class="fas fa-reply me-2"></i>返信を投稿</h6>
+                                        <EditForm Model="@replyContent" OnValidSubmit="() => SubmitReply(comment.CommentId)">
+                                            <div class="mb-3">
+                                                <InputTextArea @bind-Value="replyContent" class="form-control" rows="3" placeholder="返信内容を入力してください..." />
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="submit" class="btn btn-primary btn-sm" disabled="@isSubmitting">
+                                                    @if (isSubmitting)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                                    }
+                                                    <i class="fas fa-paper-plane me-1"></i>投稿
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelReply">
+                                                    <i class="fas fa-times me-1"></i>キャンセル
+                                                </button>
+                                            </div>
+                                        </EditForm>
+                                    </div>
+                                }
+
+                                <!-- 返信一覧 -->
+                                @if (comment.Replies.Any())
+                                {
+                                    <div class="mt-3">
+                                        @foreach (var reply in comment.Replies.OrderBy(r => r.CreatedAt))
+                                        {
+                                            <div class="card mb-2 bg-light">
+                                                <div class="card-body py-2">
+                                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                                        <div>
+                                                            <strong class="text-secondary">
+                                                                <i class="fas fa-reply me-1"></i>
+                                                                @reply.User?.UserName
+                                                            </strong>
+                                                            <small class="text-muted ms-2">
+                                                                @reply.CreatedAt.ToString("yyyy/MM/dd HH:mm")
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="comment-content small">
+                                                        @reply.CommentContent
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- 新規コメント投稿フォーム -->
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus-circle me-2"></i>新しいコメントを投稿
+                </h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="@newCommentContent" OnValidSubmit="SubmitNewComment">
+                    <div class="mb-3">
+                        <label for="newComment" class="form-label">コメント内容</label>
+                        <InputTextArea id="newComment" @bind-Value="newCommentContent" class="form-control" rows="4" placeholder="コメントを入力してください..." />
+                    </div>
+                    <button type="submit" class="btn btn-success" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="fas fa-paper-plane me-2"></i>投稿
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int ThreadId { get; set; }
+
+    private Models.Thread? thread;
+    private List<Comment> comments = new();
+    private string newCommentContent = string.Empty;
+    private string replyContent = string.Empty;
+    private int? replyToCommentId = null;
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private int currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUser();
+        await LoadThread();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadThread();
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+            }
+        }
+    }
+
+    private async Task LoadThread()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            thread = await TripReportService.GetThreadByIdAsync(ThreadId);
+            if (thread != null)
+            {
+                // 親コメントのみを取得（返信は各コメントのRepliesプロパティから表示）
+                comments = thread.Comments
+                    .Where(c => c.ParentCommentId == null)
+                    .OrderBy(c => c.CreatedAt)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SubmitNewComment()
+    {
+        if (string.IsNullOrWhiteSpace(newCommentContent))
+        {
+            errorMessage = "コメント内容を入力してください。";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await TripReportService.AddCommentToThreadAsync(ThreadId, currentUserId, newCommentContent, null);
+            successMessage = "コメントを投稿しました。";
+            newCommentContent = string.Empty;
+            await LoadThread();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"コメントの投稿に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ShowReplyForm(int commentId)
+    {
+        replyToCommentId = commentId;
+        replyContent = string.Empty;
+    }
+
+    private void CancelReply()
+    {
+        replyToCommentId = null;
+        replyContent = string.Empty;
+    }
+
+    private async Task SubmitReply(int parentCommentId)
+    {
+        if (string.IsNullOrWhiteSpace(replyContent))
+        {
+            errorMessage = "返信内容を入力してください。";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await TripReportService.AddCommentToThreadAsync(ThreadId, currentUserId, replyContent, parentCommentId);
+            successMessage = "返信を投稿しました。";
+            replyContent = string.Empty;
+            replyToCommentId = null;
+            await LoadThread();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"返信の投稿に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        if (!string.IsNullOrEmpty(thread?.CompanyCd))
+        {
+            Navigation.NavigateTo($"/threads?CompanyCd={thread.CompanyCd}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/threads");
+        }
+    }
+}

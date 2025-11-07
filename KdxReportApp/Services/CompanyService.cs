@@ -80,4 +80,12 @@ public class CompanyService
     {
         return await _readOnlyDataService.GetCustomerContactByIdAsync(customerCd, staffCd);
     }
+
+    /// <summary>
+    /// 取引先名で取引先マスタを検索（部分一致）
+    /// </summary>
+    public async Task<List<MstCustomer>> SearchCustomersAsync(string searchTerm)
+    {
+        return await _readOnlyDataService.SearchCustomersByNameAsync(searchTerm);
+    }
 }

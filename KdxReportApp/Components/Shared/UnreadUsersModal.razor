@@ -1,0 +1,253 @@
+@using KdxReport.Models
+@using KdxReport.Services
+@inject TripReportService TripReportService
+
+@if (IsVisible && Report != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-users me-2"></i>閲覧状況 - 報告書 #@Report.TripReportId
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>@errorMessage
+                        </div>
+                    }
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">読み込み中...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- 統計サマリー -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card bg-danger text-white">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="fas fa-eye-slash me-2"></i>未読者
+                                        </h5>
+                                        <h2 class="mb-0">@unreadUsers.Count 名</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="fas fa-eye me-2"></i>既読者
+                                        </h5>
+                                        <h2 class="mb-0">@readUsers.Count 名</h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- タブ切り替え -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link @(activeTab == "unread" ? "active" : "")"
+                                        @onclick="ShowUnreadTab"
+                                        type="button">
+                                    <i class="fas fa-eye-slash me-1"></i>未読者 (@unreadUsers.Count)
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link @(activeTab == "read" ? "active" : "")"
+                                        @onclick="ShowReadTab"
+                                        type="button">
+                                    <i class="fas fa-eye me-1"></i>既読者 (@readUsers.Count)
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- 未読者リスト -->
+                        @if (activeTab == "unread")
+                        {
+                            <div class="tab-content">
+                                @if (unreadUsers.Count == 0)
+                                {
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        全員が既読です！
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="list-group">
+                                        @foreach (var user in unreadUsers)
+                                        {
+                                            <div class="list-group-item list-group-item-action">
+                                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <i class="fas fa-user me-2 text-danger"></i>
+                                                            <strong>@user.UserName</strong>
+                                                        </h6>
+                                                        <p class="mb-1 text-muted small">@user.Email</p>
+                                                        @if (user.RoleUsers.Any())
+                                                        {
+                                                            <div class="mt-1">
+                                                                @foreach (var roleUser in user.RoleUsers)
+                                                                {
+                                                                    <span class="badge bg-secondary me-1">@roleUser.Role.RoleName</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        <span class="badge bg-danger">
+                                                            <i class="fas fa-eye-slash me-1"></i>未読
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- 既読者リスト -->
+                        @if (activeTab == "read")
+                        {
+                            <div class="tab-content">
+                                @if (readUsers.Count == 0)
+                                {
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        まだ誰も閲覧していません。
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="list-group">
+                                        @foreach (var (user, readAt) in readUsers)
+                                        {
+                                            <div class="list-group-item list-group-item-action">
+                                                <div class="d-flex w-100 justify-content-between align-items-start">
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <i class="fas fa-user me-2 text-success"></i>
+                                                            <strong>@user.UserName</strong>
+                                                        </h6>
+                                                        <p class="mb-1 text-muted small">@user.Email</p>
+                                                        @if (user.RoleUsers.Any())
+                                                        {
+                                                            <div class="mt-1">
+                                                                @foreach (var roleUser in user.RoleUsers)
+                                                                {
+                                                                    <span class="badge bg-secondary me-1">@roleUser.Role.RoleName</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="badge bg-success mb-1">
+                                                            <i class="fas fa-eye me-1"></i>既読
+                                                        </span>
+                                                        @if (readAt.HasValue)
+                                                        {
+                                                            <div class="text-muted small">
+                                                                <i class="fas fa-clock me-1"></i>
+                                                                @readAt.Value.ToString("yyyy/MM/dd HH:mm")
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close">
+                        <i class="fas fa-times me-1"></i>閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public TripReport? Report { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<User> unreadUsers = new();
+    private List<(User User, DateTime? ReadAt)> readUsers = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+    private string activeTab = "unread"; // "unread" or "read"
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Report != null)
+        {
+            await LoadReadStatus();
+        }
+    }
+
+    private async Task LoadReadStatus()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            if (Report != null)
+            {
+                unreadUsers = await TripReportService.GetUnreadUsersAsync(Report.TripReportId);
+                readUsers = await TripReportService.GetReadUsersAsync(Report.TripReportId);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"データの読み込みに失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsVisible = false;
+        unreadUsers.Clear();
+        readUsers.Clear();
+        activeTab = "unread";
+        await OnClose.InvokeAsync();
+    }
+
+    private void ShowUnreadTab()
+    {
+        activeTab = "unread";
+    }
+
+    private void ShowReadTab()
+    {
+        activeTab = "read";
+    }
+}

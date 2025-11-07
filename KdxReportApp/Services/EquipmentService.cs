@@ -58,4 +58,30 @@ public class EquipmentService
             .OrderBy(e => e.EquipmentName)
             .ToListAsync();
     }
+
+    /// <summary>
+    /// 指定取引先コードに紐づいた設備一覧を取得します。
+    /// </summary>
+    /// <param name="customerCd">取引先コード（MstCustomerのCustomerCd）。</param>
+    /// <returns>該当する設備のリスト。</returns>
+    public async Task<List<Equipment>> GetEquipmentByCustomerCdAsync(string customerCd)
+    {
+        return await _context.Equipment
+            .Where(e => e.CompanyCd == customerCd)
+            .OrderBy(e => e.EquipmentName)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// 指定会社コードに紐づいた設備一覧を取得します。
+    /// </summary>
+    /// <param name="companyCd">会社コード（MstCompanyのCompanyCd）。</param>
+    /// <returns>該当する設備のリスト。</returns>
+    public async Task<List<Equipment>> GetEquipmentByCompanyCdAsync(string companyCd)
+    {
+        return await _context.Equipment
+            .Where(e => e.CompanyCd == companyCd)
+            .OrderBy(e => e.EquipmentName)
+            .ToListAsync();
+    }
 }

@@ -5,16 +5,18 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject CompanyService CompanyService
+@inject TripReportService TripReportService
+@inject NavigationManager Navigation
 
-<PageTitle>会社一覧 - 出張報告書システム</PageTitle>
+<PageTitle>取引先管理 - 出張報告書システム</PageTitle>
 
 <div class="container-fluid mt-4">
     <div class="row mb-4">
         <div class="col-12">
             <h2>
-                <i class="fas fa-building me-2"></i>会社一覧
+                <i class="fas fa-building me-2"></i>取引先管理
             </h2>
-            <p class="text-muted">外部データベース（KPRO_Library）から読み込まれた会社情報です（読み取り専用）</p>
+            <p class="text-muted">外部データベース（KPRO_Library）から読み込まれた取引先情報です（読み取り専用）</p>
         </div>
     </div>
 
@@ -25,6 +27,47 @@
             <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
         </div>
     }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    <!-- 検索フォーム -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label for="searchTerm" class="form-label">検索</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <InputText id="searchTerm" class="form-control" @bind-Value="searchTerm" placeholder="取引先名、コード、住所、電話番号で検索" />
+                                <button class="btn btn-primary" type="button" @onclick="SearchCustomers" disabled="@isSearching">
+                                    @if (isSearching)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    <i class="fas fa-search me-2"></i>検索
+                                </button>
+                                @if (!string.IsNullOrEmpty(searchTerm))
+                                {
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                }
+                            </div>
+                            <div class="form-text">取引先名、取引先コード、住所、電話番号で部分一致検索が可能です</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @if (isLoading)
     {
@@ -40,30 +83,97 @@
             <div class="col-12">
                 <div class="card shadow">
                     <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <strong>検索結果: @filteredCompanies.Count 件</strong>
+                                @if (!string.IsNullOrEmpty(searchTerm))
+                                {
+                                    <span class="text-muted ms-2">（検索条件: "@searchTerm"）</span>
+                                }
+                            </div>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover table-striped">
+                                <thead class="table-light">
                                     <tr>
-                                        <th>会社コード</th>
-                                        <th>会社名</th>
+                                        <th>取引先コード</th>
+                                        <th>取引先名</th>
+                                        <th>取引先略名</th>
+                                        <th>郵便番号</th>
+                                        <th>住所</th>
+                                        <th>電話番号</th>
+                                        <th>FAX番号</th>
+                                        <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @if (companies.Count == 0)
+                                    @if (filteredCompanies.Count == 0)
                                     {
                                         <tr>
-                                            <td colspan="2" class="text-center py-4">
-                                                <i class="fas fa-inbox me-2"></i>会社が登録されていません。
+                                            <td colspan="9" class="text-center py-4">
+                                                <i class="fas fa-inbox me-2"></i>
+                                                @if (string.IsNullOrEmpty(searchTerm))
+                                                {
+                                                    <text>取引先が登録されていません。</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>検索条件に一致する取引先が見つかりませんでした。</text>
+                                                }
                                             </td>
                                         </tr>
                                     }
                                     else
                                     {
-                                        @foreach (var company in companies)
+                                        @foreach (var customer in filteredCompanies)
                                         {
                                             <tr>
-                                                <td>@company.CustomerCd</td>
-                                                <td>@company.CompanyNm</td>
+                                                <td><strong>@customer.CustomerCd</strong></td>
+                                                <td>@customer.CompanyNm</td>
+                                                <td>@customer.CompanyAb</td>
+                                                <td>@customer.PostCd</td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(customer.Address1) || !string.IsNullOrEmpty(customer.Address2))
+                                                    {
+                                                        <div>@customer.Address1</div>
+                                                        @if (!string.IsNullOrEmpty(customer.Address2))
+                                                        {
+                                                            <div class="text-muted small">@customer.Address2</div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!string.IsNullOrEmpty(customer.Tel))
+                                                    {
+                                                        <div>@customer.Tel</div>
+                                                        @if (!string.IsNullOrEmpty(customer.Tel2))
+                                                        {
+                                                            <div class="text-muted small">@customer.Tel2</div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>@(customer.Fax ?? "-")</td>
+                                                <td>
+                                                    <div class="btn-group" role="group">
+                                                        <a href="/reports?CustomerCd=@customer.CustomerCd" class="btn btn-sm btn-primary" title="報告書一覧">
+                                                            <i class="fas fa-file-alt"></i> 報告書
+                                                        </a>
+                                                        <a href="/threads?CompanyCd=@customer.CustomerCd" class="btn btn-sm btn-info" title="スレッド一覧">
+                                                            <i class="fas fa-comments"></i> スレッド
+                                                        </a>
+                                                        <button class="btn btn-sm btn-success" @onclick="() => ShowCreateThreadModal(customer)" title="スレッド作成">
+                                                            <i class="fas fa-plus"></i> 新規
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         }
                                     }
@@ -77,11 +187,61 @@
     }
 </div>
 
+<!-- スレッド作成モーダル -->
+@if (showCreateThreadModal && selectedCustomer != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle me-2"></i>スレッド作成
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="HideCreateThreadModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label"><strong>取引先:</strong></label>
+                        <p class="form-control-plaintext">@selectedCustomer.CompanyNm (@selectedCustomer.CustomerCd)</p>
+                    </div>
+                    <EditForm Model="@newThreadName" OnValidSubmit="CreateThread">
+                        <div class="mb-3">
+                            <label for="threadName" class="form-label">スレッド名 <span class="text-danger">*</span></label>
+                            <InputText id="threadName" @bind-Value="newThreadName" class="form-control" placeholder="例: 見積相談、納期調整など" />
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" @onclick="HideCreateThreadModal">
+                                <i class="fas fa-times me-1"></i>キャンセル
+                            </button>
+                            <button type="submit" class="btn btn-success" disabled="@isCreatingThread">
+                                @if (isCreatingThread)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-check me-1"></i>作成
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<MstCustomer> companies = new();
-
+    private List<MstCustomer> filteredCompanies = new();
+    private string searchTerm = string.Empty;
     private bool isLoading = true;
+    private bool isSearching = false;
     private string? errorMessage;
+    private string? successMessage;
+
+    // スレッド作成モーダル関連
+    private bool showCreateThreadModal = false;
+    private bool isCreatingThread = false;
+    private MstCustomer? selectedCustomer = null;
+    private string newThreadName = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -94,6 +254,7 @@
         try
         {
             companies = await CompanyService.GetAllCustomersAsync();
+            filteredCompanies = companies;
         }
         catch (Exception ex)
         {
@@ -102,6 +263,86 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task SearchCustomers()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredCompanies = companies;
+            return;
+        }
+
+        isSearching = true;
+        errorMessage = null;
+
+        try
+        {
+            filteredCompanies = await CompanyService.SearchCustomersAsync(searchTerm);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"検索中にエラーが発生しました: {ex.Message}";
+            filteredCompanies = new List<MstCustomer>();
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
+        filteredCompanies = companies;
+        await Task.CompletedTask;
+    }
+
+    private void ShowCreateThreadModal(MstCustomer customer)
+    {
+        selectedCustomer = customer;
+        newThreadName = string.Empty;
+        showCreateThreadModal = true;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void HideCreateThreadModal()
+    {
+        showCreateThreadModal = false;
+        selectedCustomer = null;
+        newThreadName = string.Empty;
+    }
+
+    private async Task CreateThread()
+    {
+        if (selectedCustomer == null || string.IsNullOrWhiteSpace(newThreadName))
+        {
+            errorMessage = "スレッド名を入力してください。";
+            return;
+        }
+
+        isCreatingThread = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var thread = await TripReportService.CreateThreadForCompanyAsync(selectedCustomer.CustomerCd, newThreadName);
+            successMessage = $"スレッド「{newThreadName}」を作成しました。";
+            HideCreateThreadModal();
+
+            // 作成したスレッド詳細ページに遷移
+            Navigation.NavigateTo($"/threads/{thread.ThreadId}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"スレッドの作成に失敗しました: {ex.Message}";
+        }
+        finally
+        {
+            isCreatingThread = false;
         }
     }
 }

@@ -151,5 +151,28 @@ public class UserService
 
         return result;
     }
+
+    /// <summary>
+    /// すべてのユーザーを取得
+    /// </summary>
+    public async Task<List<User>> GetAllUsersAsync()
+    {
+        return await _context.Users
+            .Include(u => u.RoleUsers)
+            .ThenInclude(ru => ru.Role)
+            .OrderBy(u => u.UserName)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// ユーザーIDでユーザーを取得
+    /// </summary>
+    public async Task<User?> GetUserByIdAsync(int userId)
+    {
+        return await _context.Users
+            .Include(u => u.RoleUsers)
+            .ThenInclude(ru => ru.Role)
+            .FirstOrDefaultAsync(u => u.UserId == userId);
+    }
 }
 

@@ -43,6 +43,11 @@ public class TripReport
     public DateTime TripEndDate { get; set; }
 
     [Required]
+    [MaxLength(200)]
+    [Column("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [Required]
     [MaxLength(100)]
     [Column("submitter")]
     public string Submitter { get; set; } = string.Empty;
